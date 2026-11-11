@@ -15,6 +15,7 @@
 
 package edu.mit.csail.sdg.alloy4viz;
 
+import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
@@ -32,13 +33,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.TreeMap;
+import java.util.function.IntConsumer;
 
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
+import javax.swing.JComponent;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
@@ -275,8 +279,28 @@ public final class VizGraphPanel extends JPanel {
      * @param firstState - the index of the state shown by the first graph
      */
     public VizGraphPanel(JFrame parent, List<VizState> vizState, boolean seeDot, Continuity continuity, int firstState) {
+        this(parent, vizState, seeDot, continuity, firstState, null);
+    }
+
+    /**
+     * Create a splitpane showing the graphs on top, as well as projection
+     * comboboxes on the bottom.
+     *
+     * @param vizState - the current visualization settings
+     * @param seeDot - true if we want to see the DOT source code, false if we want
+     *            it rendered as a graph
+     * @param continuity - what keeps the graphs consistent with each other (null if
+     *            nothing does)
+     * @param firstState - the index of the state shown by the first graph
+     * @param onSelectFrame - if not null, the graphs are shown as a storyboard: a
+     *            strip of frames at one common scale, each under a heading that
+     *            names its state; this is called with the index of the state whose
+     *            heading the user clicks
+     */
+    public VizGraphPanel(JFrame parent, List<VizState> vizState, boolean seeDot, Continuity continuity, int firstState, IntConsumer onSelectFrame) {
         this.continuity = continuity;
         this.firstState = firstState;
+        this.onSelectFrame = onSelectFrame;
         Border b = new EmptyBorder(0, 0, 0, 0);
         OurUtil.make(this, Color.BLACK, Color.WHITE, b);
         this.seeDot = seeDot;
@@ -292,11 +316,21 @@ public final class VizGraphPanel extends JPanel {
         for (int i = 0; i < vizState.size(); i++) {
             JScrollPane diagramScrollPanel = createGraphPanel(i);
             diagramScrollPanels.add(diagramScrollPanel);
-            diagramsScrollPanels.add(diagramScrollPanel);
-            diagramScrollPanel.setPreferredSize(new Dimension(0, 0));
+            if (onSelectFrame == null) {
+                diagramsScrollPanels.add(diagramScrollPanel);
+                diagramScrollPanel.setPreferredSize(new Dimension(0, 0));
+            } else
+                diagramsScrollPanels.add(createFrame(i, diagramScrollPanel));
+        }
+        JComponent diagrams = diagramsScrollPanels;
+        if (onSelectFrame != null) {
+            // The frames keep their own size, and the strip as a whole scrolls.
+            diagramsScrollPanels.setBackground(Color.WHITE);
+            diagramsScrollPanels.add(Box.createHorizontalGlue());
+            diagrams = OurUtil.scrollpane(diagramsScrollPanels, new OurBorder(true, false, true, false));
         }
 
-        split = OurUtil.splitpane(JSplitPane.VERTICAL_SPLIT, diagramsScrollPanels, navscroll, 0);
+        split = OurUtil.splitpane(JSplitPane.VERTICAL_SPLIT, diagrams, navscroll, 0);
         split.setResizeWeight(1.0);
         split.setDividerSize(0);
         add(split);
@@ -375,6 +409,101 @@ public final class VizGraphPanel extends JPanel {
         return vizState.get(i).getGraph(parent, currentProjection, context);
     }
 
+    /**
+     * If not null, the graphs are shown as a storyboard, and this is called with
+     * the index of the state whose heading the user clicks.
+     */
+    private final IntConsumer  onSelectFrame;
+
+    /** In a storyboard, the heading of each frame. */
+    private final List<JLabel> headings      = new ArrayList<JLabel>();
+
+    /** In a storyboard, the index of the state whose frame is marked as selected. */
+    private int                selectedState = -1;
+
+    /** The smallest scale that a storyboard shrinks its frames to before it scrolls instead. */
+    private static final double minStoryboardScale = 0.6;
+
+    /** Returns true if the graphs are shown as a storyboard. */
+    public boolean isStoryboard() {
+        return onSelectFrame != null;
+    }
+
+    /**
+     * Sets the index of the state whose frame a storyboard marks as selected; takes
+     * effect at the next remakeAll.
+     */
+    public void setSelectedState(int selectedState) {
+        this.selectedState = selectedState;
+    }
+
+    /**
+     * Creates the i-th frame of a storyboard: the given graph pane, which takes the
+     * size of its graph, under a heading.
+     */
+    private JPanel createFrame(final int i, JScrollPane graphPane) {
+        graphPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        graphPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_NEVER);
+        graphPane.setBorder(null);
+        JLabel heading = new JLabel(" ");
+        heading.setOpaque(true);
+        heading.setBorder(new EmptyBorder(3, 8, 3, 8));
+        heading.setToolTipText("Click to select this state");
+        heading.addMouseListener(new MouseAdapter() {
+
+            @Override
+            public void mousePressed(MouseEvent ev) {
+                if (ev.getButton() == MouseEvent.BUTTON1)
+                    onSelectFrame.accept(firstState + i);
+            }
+        });
+        headings.add(heading);
+        JPanel frame = new JPanel(new BorderLayout());
+        frame.setBackground(Color.WHITE);
+        frame.setBorder(new OurBorder(false, false, false, true));
+        frame.add(heading, BorderLayout.NORTH);
+        frame.add(graphPane, BorderLayout.CENTER);
+        frame.setAlignmentY(0f);
+        return frame;
+    }
+
+    /**
+     * In a storyboard, names each frame and gives all graphs one scale: the one at
+     * which the whole strip fits the window, down to a readable minimum.
+     */
+    private void arrangeStoryboard(JFrame parent) {
+        for (int i = 0; i < headings.size(); i++) {
+            boolean selected = firstState + i == selectedState;
+            JLabel heading = headings.get(i);
+            heading.setText(continuity == null ? "State " + (firstState + i) : continuity.title(firstState + i));
+            heading.setFont(heading.getFont().deriveFont(selected ? Font.BOLD : Font.PLAIN));
+            heading.setBackground(selected ? new Color(200, 225, 255) : new Color(238, 238, 238));
+        }
+        if (viewer == null || viewer.isEmpty())
+            return;
+        int widest = 1;
+        for (GraphViewer v : viewer)
+            widest = Math.max(widest, v.getGraph().getTotalWidth());
+        double natural = vizState.get(0).getFontSize() / 12.0D;
+        double room = ((parent != null && parent.getWidth() > 0 ? parent.getWidth() : 1200) - 40) / (double) viewer.size() - 12;
+        double scale = Math.max(minStoryboardScale * natural, Math.min(natural, room / widest));
+        for (GraphViewer v : viewer)
+            v.setScale(scale);
+    }
+
+    /** Makes hovering over an atom in one graph highlight the same atom in the others. */
+    private void linkHovering() {
+        if (viewer == null || viewer.size() < 2)
+            return;
+        final List<GraphViewer> all = new ArrayList<GraphViewer>(viewer);
+        for (final GraphViewer source : all)
+            source.setHoverListener(key -> {
+                for (GraphViewer other : all)
+                    if (other != source)
+                        other.highlightKey(key);
+            });
+    }
+
     /** Regenerate the comboboxes and the graph. */
     public void remakeAll(JFrame parent) {
         Map<AlloyType,AlloyAtom> map = new LinkedHashMap<AlloyType,AlloyAtom>();
@@ -407,7 +536,7 @@ public final class VizGraphPanel extends JPanel {
             } else {
                 if (graph instanceof GraphViewer) {
                     viewer.add((GraphViewer) graph);
-                    if (prevsv != null && i < prevsv.size() && prevsv.get(i) != graph)
+                    if (!isStoryboard() && prevsv != null && i < prevsv.size() && prevsv.get(i) != graph)
                         ((GraphViewer) graph).setScale(prevsv.get(i).getScale());
                 } else
                     viewer = null;
@@ -418,6 +547,14 @@ public final class VizGraphPanel extends JPanel {
                 diagramScrollPanels.get(i).invalidate();
                 diagramScrollPanels.get(i).repaint();
                 diagramScrollPanels.get(i).validate();
+            }
+        }
+        linkHovering();
+        if (isStoryboard()) {
+            arrangeStoryboard(parent);
+            for (int i = 0; i < graphPanels.size(); i++) {
+                diagramScrollPanels.get(i).setPreferredSize(null);
+                graphPanels.get(i).revalidate();
             }
         }
         split.setDividerLocation(split.getSize().height - split.getInsets().bottom - split.getDividerSize() - split.getRightComponent().getPreferredSize().height);

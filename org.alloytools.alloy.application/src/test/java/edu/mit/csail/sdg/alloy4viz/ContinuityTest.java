@@ -161,4 +161,22 @@ public class ContinuityTest {
         assertSame(trace.get(0), c.contextFor(0, view, new AlloyProjection()).baseline);
         assertSame(again.get(0), c.contextFor(1, view, new AlloyProjection()).baseline);
     }
+
+    @Test
+    public void titlesNameEachStateAndWhereTheTraceGoesOn() {
+        Continuity c = new Continuity();
+        c.start(trace);
+        int n = trace.size(), loop = trace.get(0).originalA4.getLoopState();
+        assertEquals("State 0", c.title(0));
+        assertEquals("State 1", c.title(1));
+        assertEquals(loop == n - 1 ? "State " + (n - 1) + ", repeats forever" : "State " + (n - 1) + ", then back to State " + loop, c.title(n - 1));
+        assertEquals("the fixture ends in a state that repeats", n - 1, loop);
+    }
+
+    @Test
+    public void aStaticInstanceHasNoTitle() {
+        Continuity c = new Continuity();
+        c.start(fixed);
+        assertEquals("", c.title(0));
+    }
 }

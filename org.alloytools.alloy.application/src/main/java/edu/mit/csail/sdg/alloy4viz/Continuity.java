@@ -99,6 +99,21 @@ public final class Continuity {
         return earlierStates.isEmpty() ? null : earlierStates.get(0);
     }
 
+    /**
+     * Returns the heading for the given state of a trace, which for the last state
+     * of the prefix says where the trace goes on from there; "" if this is not a
+     * trace.
+     */
+    public String title(int index) {
+        if (!isTrace())
+            return "";
+        final int n = states.size(), at = fold(index);
+        if (at < n - 1)
+            return "State " + at;
+        final int loop = fold(n);
+        return "State " + at + (loop == at ? ", repeats forever" : ", then back to State " + loop);
+    }
+
     /** Returns the number of states: the length of the trace prefix, or 1. */
     public int size() {
         return states.size();

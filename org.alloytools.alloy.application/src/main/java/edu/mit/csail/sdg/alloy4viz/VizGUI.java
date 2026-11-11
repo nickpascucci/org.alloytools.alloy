@@ -190,7 +190,10 @@ public final class VizGUI implements ComponentListener {
     private final JMenuItem     initMenu;
 
     /** The trace navigation menu items. */
-    private final JMenuItem     rightNavMenu, leftNavMenu, changesMenu;
+    private final JMenuItem     rightNavMenu, leftNavMenu, changesMenu, storyboardMenu;
+
+    /** The button that switches between the storyboard and the two-state view of a trace. */
+    private JButton             storyboardButton;
 
     /** The button that turns the highlighting of changes on and off. */
     private JButton             changesButton;
@@ -677,6 +680,7 @@ public final class VizGUI implements ComponentListener {
             leftNavMenu = menuItem(instanceMenu, "Show Previous State", KeyEvent.VK_LEFT, KeyEvent.VK_LEFT, doNavLeft());
             rightNavMenu = menuItem(instanceMenu, "Show Next State", KeyEvent.VK_RIGHT, KeyEvent.VK_RIGHT, doNavRight());
             changesMenu = menuItem(instanceMenu, "Highlight Changes", 'H', 'H', doToggleChanges());
+            storyboardMenu = menuItem(instanceMenu, "Show Trace as Storyboard", 'B', 'B', doToggleStoryboard());
             thememenu = menu(mb, "&Theme", doRefreshTheme());
             if (standalone || windowmenu == null)
                 windowmenu = menu(mb, "&Window", doRefreshWindow());
@@ -736,6 +740,7 @@ public final class VizGUI implements ComponentListener {
             // [electrum] trace navigation buttons
             toolbar.add(leftNavButton = OurUtil.button(new String(Character.toChars(0x2190)), "Show the previous state", "images/24_history.gif", doNavLeft()));
             toolbar.add(rightNavButton = OurUtil.button(new String(Character.toChars(0x2192)), "Show the next state", "images/24_history.gif", doNavRight()));
+            toolbar.add(storyboardButton = OurUtil.button("Storyboard", "Show every state of the trace side by side, up to where it repeats", "images/24_storyboard.gif", doToggleStoryboard()));
             toolbar.add(changesButton = OurUtil.button("Changes", "Highlight what changed from the previous state or solution", "images/24_changes.gif", doToggleChanges()));
             toolbar.add(projectionButton);
             toolbar.add(loadSettingsButton = OurUtil.button("Load", "Load the theme customization from a theme file", "images/24_open.gif", doLoadTheme()));
@@ -941,20 +946,30 @@ public final class VizGUI implements ComponentListener {
         // on the right
         if (frame != null)
             frame.setTitle(makeVizTitle());
-        int numPanes = isTrace && !isMeta ? statepanes : 1;
+        storyShown = isTrace && !isMeta && currentMode == VisualizerMode.Viz && Storyboard.get() != 0;
+        if (storyShown && current >= continuity.size())
+            current = continuity.size() - 1;
+        int numPanes = isTrace && !isMeta ? (storyShown ? continuity.size() : statepanes) : 1;
+        if (isTrace && !isMeta && myStates.size() != numPanes) {
+            while (myStates.size() > numPanes)
+                myStates.remove(myStates.size() - 1);
+            while (myStates.size() < numPanes)
+                myStates.add(new VizState(myStates.get(0)));
+            lastParsed = -1;
+        }
+        final int first = firstShown();
 
-
-        if (current != lastParsed) {
+        if (first != lastParsed) {
             for (int i = 0; i < getVizState().size(); i++) {
                 File f = new File(getXMLfilename());
                 try {
                     if (!f.exists())
                         throw new IOException("File " + getXMLfilename() + " does not exist.");
 
-                    if (current + i < 0) {
+                    if (first + i < 0) {
                         getVizState().set(i, null);
                     } else {
-                        AlloyInstance myInstance = continuity.state(current + i);
+                        AlloyInstance myInstance = continuity.state(first + i);
                         if (getVizState().get(i) != null)
                             getVizState().get(i).loadInstance(myInstance);
                         else {
@@ -968,7 +983,7 @@ public final class VizGUI implements ComponentListener {
                     return;
                 }
             }
-            lastParsed = current;
+            lastParsed = first;
         }
 
         switch (currentMode) {
@@ -1001,9 +1016,13 @@ public final class VizGUI implements ComponentListener {
             }
             default : {
                 continuity.setShowChanges(ShowChanges.get() != 0);
-                if (myGraphPanel == null || numPanes != myGraphPanel.numPanels())
-                    myGraphPanel = new VizGraphPanel(frame, myStates, false, continuity, current);
-                myGraphPanel.setFirstState(current);
+                if (myGraphPanel == null || numPanes != myGraphPanel.numPanels() || storyShown != myGraphPanel.isStoryboard())
+                    myGraphPanel = new VizGraphPanel(frame, myStates, false, continuity, first, storyShown ? state -> {
+                        current = state;
+                        updateDisplay();
+                    } : null);
+                myGraphPanel.setFirstState(first);
+                myGraphPanel.setSelectedState(current);
 
                 myGraphPanel.seeDot(frame, false);
                 myGraphPanel.remakeAll(frame);
@@ -1027,6 +1046,11 @@ public final class VizGUI implements ComponentListener {
             content.setVisible(true);
         }
 
+        storyboardButton.setVisible(isTrace && !isMeta && currentMode == VisualizerMode.Viz && settingsOpen == 0);
+        storyboardButton.setText(storyShown ? "Two States" : "Storyboard");
+        storyboardMenu.setVisible(isTrace);
+        storyboardMenu.setEnabled(isTrace && !isMeta && currentMode == VisualizerMode.Viz);
+        storyboardMenu.setText(storyShown ? "Show Two States of the Trace" : "Show Trace as Storyboard");
         changesButton.setVisible(!isMeta && currentMode == VisualizerMode.Viz && settingsOpen == 0);
         changesButton.setText(ShowChanges.get() != 0 ? "Changes: On" : "Changes: Off");
         changesMenu.setEnabled(!isMeta && currentMode == VisualizerMode.Viz);
@@ -1329,7 +1353,8 @@ public final class VizGUI implements ComponentListener {
             frame.setTitle("Alloy Visualizer " + Version.version() + " loading... Please wait...");
             OurUtil.show(frame);
         }
-        lastParsed = current;
+        // Only the first panes were given their state above; updateDisplay does the rest.
+        lastParsed = -1;
         updateDisplay();
     }
 
@@ -1817,6 +1842,29 @@ public final class VizGUI implements ComponentListener {
         return wrapMe();
     }
 
+    /** Whether a trace is shown as a storyboard of all its states. */
+    private static final IntPref Storyboard  = new IntPref("VizStoryboard", 0, 0, 1);
+
+    /**
+     * Whether the display currently is a storyboard, which shows the states from
+     * the start of the trace and uses the current state only as a selection.
+     */
+    private boolean              storyShown  = false;
+
+    /** Returns the index of the state shown by the first graph. */
+    private int firstShown() {
+        return storyShown ? 0 : current;
+    }
+
+    /** Switches between the storyboard and the two-state view of a trace. */
+    private Runner doToggleStoryboard() {
+        if (wrap)
+            return wrapMe();
+        Storyboard.set(Storyboard.get() == 0 ? 1 : 0);
+        updateDisplay();
+        return null;
+    }
+
     /** Whether changes between states and between solutions are highlighted. */
     private static final IntPref ShowChanges = new IntPref("VizShowChanges", 0, 1, 1);
 
@@ -1869,6 +1917,14 @@ public final class VizGUI implements ComponentListener {
     private Runner doNavRight() {
         if (wrap)
             return wrapMe();
+        if (storyShown) {
+            // In a storyboard this moves the selection, which stays within the frames.
+            if (current < continuity.size() - 1) {
+                current++;
+                updateDisplay();
+            }
+            return null;
+        }
         int lst = getVizState().get(0).getOriginalInstance().originalA4.getTraceLength();
         int lop = getVizState().get(0).getOriginalInstance().originalA4.getLoopState();
         int lmx = current + 1 + getVizState().size() > lst ? current + 1 + getVizState().size() : lst;
@@ -2161,6 +2217,7 @@ public final class VizGUI implements ComponentListener {
                 int dist = 45;
                 int offsety = 2 + heighti / 2;
                 // center and apply offset according to current state
+                final int current = firstShown(); // the first state of the window of states on screen
                 int offsetx = this.getWidth() / 2 + ((dist - 2 * radius) / 2) - (dist * (current + 1));
                 int lst = getVizState().get(getVizState().size() - 1).getOriginalInstance().tracelen;
                 int lol = getVizState().get(getVizState().size() - 1).getOriginalInstance().looplen;
@@ -2179,7 +2236,7 @@ public final class VizGUI implements ComponentListener {
                     int max = normalize(current + getVizState().size() - 1, lmx, lox);
                     int min = normalize(current, lmx, lox);
                     if ((min <= max && i >= min && i <= max) || (min > max && (i >= min || (i <= max && i >= lox)))) {
-                        g2.setColor(new Color(255, 255, 255));
+                        g2.setColor(storyShown && i == VizGUI.this.current ? new Color(200, 225, 255) : new Color(255, 255, 255));
                     } else {
                         g2.setColor(new Color(120, 120, 120));
                     }

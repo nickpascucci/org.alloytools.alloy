@@ -100,6 +100,53 @@ public final strictfp class GraphViewer extends JPanel {
      */
     public final JPopupMenu   pop              = new JPopupMenu();
 
+    /**
+     * Sets the listener that is told the layout key of the node under the mouse
+     * (null when the mouse is over no such node) each time that changes.
+     */
+    public void setHoverListener(java.util.function.Consumer<String> listener) {
+        hoverListener = listener;
+    }
+
+    /** The listener set by setHoverListener; null if there is none. */
+    private java.util.function.Consumer<String> hoverListener = null;
+
+    /** What the hover listener was told last. */
+    private String                              hoverTold     = null;
+
+    /** Tells the hover listener the key of the highlighted node if that has changed. */
+    private void tellHover() {
+        String key = highlightedKey();
+        if (hoverListener != null && (key == null ? hoverTold != null : !key.equals(hoverTold)))
+            hoverListener.accept(key);
+        hoverTold = key;
+    }
+
+    /**
+     * Highlights the node that has the given layout key, as if the mouse were over
+     * it; null, or a key that no node has, removes the highlight.
+     */
+    public void highlightKey(String key) {
+        Object found = null;
+        if (key != null)
+            for (GraphNode n : graph.nodes)
+                if (key.equals(n.layoutKey()))
+                    found = n;
+        if (highlight != found) {
+            highlight = found;
+            repaint();
+        }
+        hoverTold = highlightedKey();
+    }
+
+    /**
+     * Returns the layout key of the highlighted node, or null if no node with a
+     * layout key is highlighted.
+     */
+    public String highlightedKey() {
+        return highlight instanceof GraphNode ? ((GraphNode) highlight).layoutKey() : null;
+    }
+
     /** Returns the graph being displayed. */
     public Graph getGraph() {
         return graph;
@@ -254,6 +301,7 @@ public final strictfp class GraphViewer extends JPanel {
                 if (highlight != obj) {
                     highlight = obj;
                     alloyRepaint();
+                    tellHover();
                 }
             }
 
@@ -316,6 +364,7 @@ public final strictfp class GraphViewer extends JPanel {
                 if (highlight != null) {
                     highlight = null;
                     alloyRepaint();
+                    tellHover();
                 }
             }
         });
