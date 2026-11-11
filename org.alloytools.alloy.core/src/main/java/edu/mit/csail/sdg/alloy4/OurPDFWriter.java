@@ -89,6 +89,20 @@ public final strictfp class OurPDFWriter {
         return this;
     }
 
+    /**
+     * Changes the line style to the given width and dash pattern (null or empty for
+     * a solid line).
+     */
+    public OurPDFWriter setLine(double width, float[] dash) {
+        buf.writes(width).write("w [");
+        if (dash != null)
+            for (float d : dash)
+                buf.writes(d);
+        buf.write("] 0 d\n");
+        line = -1;
+        return this;
+    }
+
     /** Changes the line style to be normal. */
     public OurPDFWriter setNormalLine() {
         if (line != 0)

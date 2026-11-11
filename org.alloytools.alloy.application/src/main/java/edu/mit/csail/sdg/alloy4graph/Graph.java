@@ -1255,6 +1255,8 @@ public final strictfp class Graph {
         // we must make sure we only draw out edges from non-dummy-nodes
         int maxAscent = Artist.getMaxAscent();
         for (GraphNode n : nodes)
+            n.drawHalo(gr, scale);
+        for (GraphNode n : nodes)
             if (n.shape() != null) {
                 for (GraphEdge e : n.outs)
                     if (e.group != group)

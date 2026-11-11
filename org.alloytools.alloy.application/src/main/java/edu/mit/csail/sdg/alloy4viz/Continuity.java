@@ -20,6 +20,12 @@ public final class Continuity {
     /** The states of the current solution. */
     private List<AlloyInstance>                                states   = Collections.emptyList();
 
+    /** The states of the solution before this one; empty if there is none. */
+    private List<AlloyInstance>                                earlierStates = Collections.emptyList();
+
+    /** Whether graphs are marked with what changed. */
+    private boolean                                            showChanges = true;
+
     /** For each projection, the arrangement the solution before this one had. */
     private Map<AlloyProjection,LayoutTemplate>                earlier  = new HashMap<AlloyProjection,LayoutTemplate>();
 
@@ -36,6 +42,7 @@ public final class Continuity {
     /** Starts over with the states of a solution unrelated to anything before. */
     public void start(List<AlloyInstance> states) {
         this.states = states;
+        earlierStates = Collections.emptyList();
         earlier = new HashMap<AlloyProjection,LayoutTemplate>();
         forget();
     }
@@ -50,6 +57,7 @@ public final class Continuity {
         // A trace has its shared arrangement, which covers the atoms of all its
         // states; what is on screen covers only the atoms of the states shown.
         earlier = new HashMap<AlloyProjection,LayoutTemplate>(isTrace() ? shared : shown);
+        earlierStates = this.states;
         this.states = states;
         forget();
     }
@@ -61,6 +69,34 @@ public final class Continuity {
 
     private boolean isTrace() {
         return !states.isEmpty() && !states.get(0).isMetamodel && states.get(0).originalA4.getMaxTrace() >= 0;
+    }
+
+    /**
+     * Sets whether graphs are marked with what changed: each state of a trace
+     * against the state before it, and the first state of a solution against the
+     * first state of the solution before it.
+     */
+    public void setShowChanges(boolean showChanges) {
+        if (this.showChanges != showChanges)
+            contexts.clear();
+        this.showChanges = showChanges;
+    }
+
+    /** Returns whether graphs are marked with what changed. */
+    public boolean showChanges() {
+        return showChanges;
+    }
+
+    /**
+     * Returns the instance that the given state is compared with, or null if there
+     * is none.
+     */
+    private AlloyInstance baseline(int index) {
+        if (!showChanges)
+            return null;
+        if (index > 0 && isTrace())
+            return state(index - 1);
+        return earlierStates.isEmpty() ? null : earlierStates.get(0);
     }
 
     /** Returns the number of states: the length of the trace prefix, or 1. */
@@ -101,21 +137,21 @@ public final class Continuity {
             contexts.put(proj, perState = new HashMap<Integer,GraphContext>());
         GraphContext ans = perState.get(index);
         if (ans == null)
-            perState.put(index, ans = makeContext(view, proj));
+            perState.put(index, ans = makeContext(index, view, proj));
         return ans;
     }
 
-    private GraphContext makeContext(VizState view, AlloyProjection proj) {
+    private GraphContext makeContext(int index, VizState view, AlloyProjection proj) {
         if (!isTrace())
-            return new GraphContext(earlier.get(proj), false);
+            return new GraphContext(earlier.get(proj), false, baseline(index));
         LayoutTemplate template = shared.get(proj);
         if (template == null)
             try {
                 shared.put(proj, template = TraceLayout.template(states, view, proj, earlier.get(proj)));
             } catch (ErrorFatal ex) {
-                return new GraphContext(null, false);
+                return new GraphContext(null, false, baseline(index));
             }
-        return new GraphContext(template, true);
+        return new GraphContext(template, true, baseline(index));
     }
 
     /**

@@ -31,6 +31,7 @@ import javax.swing.JPanel;
 import aQute.lib.justif.Justif;
 import edu.mit.csail.sdg.alloy4.ErrorFatal;
 import edu.mit.csail.sdg.alloy4.Util;
+import edu.mit.csail.sdg.alloy4graph.DiffMark;
 import edu.mit.csail.sdg.alloy4graph.DotColor;
 import edu.mit.csail.sdg.alloy4graph.DotDirection;
 import edu.mit.csail.sdg.alloy4graph.DotPalette;
@@ -40,7 +41,6 @@ import edu.mit.csail.sdg.alloy4graph.Graph;
 import edu.mit.csail.sdg.alloy4graph.GraphEdge;
 import edu.mit.csail.sdg.alloy4graph.GraphNode;
 import edu.mit.csail.sdg.alloy4graph.GraphViewer;
-import edu.mit.csail.sdg.alloy4graph.LayoutTemplate;
 
 /**
  * This utility class generates a graph for a particular index of the
@@ -90,21 +90,56 @@ public final class StaticGraphMaker {
     /** The resulting graph. */
     private final Graph                      graph;
 
+    /** Maps the original name of each atom that has a node to that node. */
+    private final Map<String,GraphNode>      name2node = new LinkedHashMap<String,GraphNode>();
+
+    /**
+     * If not null, this maker adds the ghosts of a baseline instance to the graph
+     * that the given maker made: nodes and edges for what the baseline has and the
+     * shown instance lacks.
+     */
+    private final StaticGraphMaker           shown;
+
+    /** If shown is not null, the differences from the baseline to the shown instance. */
+    private final InstanceDiff               diff;
+
+    /** Marks the nodes and edges that are new or different according to the given differences. */
+    private void mark(InstanceDiff diff) {
+        for (Map.Entry<GraphNode,AlloyAtom> e : nodes.entrySet()) {
+            String name = e.getValue().getOriginalName();
+            if (diff.addedAtoms().contains(name)) {
+                e.getKey().set(DiffMark.ADDED);
+                continue;
+            }
+            boolean changed = diff.movedAtoms().contains(name);
+            for (AlloyRelation rel : model.getRelations())
+                if (!changed && view.attribute.resolve(rel) && !(view.hidePrivate() && rel.isPrivate) && !(view.hideSkolem() && rel.isSkolem))
+                    changed = diff.differsFrom(rel, name);
+            if (changed)
+                e.getKey().set(DiffMark.CHANGED);
+        }
+        for (Map.Entry<GraphEdge,AlloyTuple> e : edges.entrySet())
+            if (e.getKey().group instanceof AlloyRelation && diff.isAdded((AlloyRelation) e.getKey().group, e.getValue()))
+                e.getKey().set(DiffMark.ADDED);
+    }
+
     /**
      * Produces a single Graph from the given Instance and View and choice of
      * Projection
      */
     public static JPanel produceGraph(JFrame parent, AlloyInstance instance, VizState view, AlloyProjection proj) throws ErrorFatal {
-        return produceGraph(parent, instance, view, proj, null, false);
+        return produceGraph(parent, instance, view, proj, null);
     }
 
     /**
      * Produces a single Graph from the given Instance and View and choice of
-     * Projection, laid out to follow the given template (see
-     * {@link Graph#layout(LayoutTemplate, boolean)}).
+     * Projection, laid out and marked as the given context asks (null if the graph
+     * stands alone).
      */
-    public static JPanel produceGraph(JFrame parent, AlloyInstance instance, VizState view, AlloyProjection proj, LayoutTemplate template, boolean strict) throws ErrorFatal {
-        return new GraphViewer(parent, buildGraph(instance, view, proj), template, strict);
+    public static JPanel produceGraph(JFrame parent, AlloyInstance instance, VizState view, AlloyProjection proj, GraphContext context) throws ErrorFatal {
+        if (context == null)
+            return new GraphViewer(parent, buildGraph(instance, view, proj));
+        return new GraphViewer(parent, buildGraph(instance, view, proj, context.baseline), context.template, context.strict);
     }
 
     /**
@@ -113,11 +148,27 @@ public final class StaticGraphMaker {
      * original name as its layout key.
      */
     public static Graph buildGraph(AlloyInstance instance, VizState view, AlloyProjection proj) throws ErrorFatal {
+        return buildGraph(instance, view, proj, null);
+    }
+
+    /**
+     * Builds the graph, not yet laid out, for the given Instance and View and
+     * choice of Projection, marked with its differences from the baseline instance
+     * (if not null): what is new or different carries a DiffMark, and what is gone
+     * is put back in as a ghost, marked REMOVED. Atoms are matched by their
+     * original name.
+     */
+    public static Graph buildGraph(AlloyInstance instance, VizState view, AlloyProjection proj, AlloyInstance baseline) throws ErrorFatal {
         view = new VizState(view);
         if (proj == null)
             proj = new AlloyProjection();
         Graph graph = new Graph(view.getFontSize() / 12.0D);
-        new StaticGraphMaker(graph, instance, view, proj);
+        StaticGraphMaker now = new StaticGraphMaker(graph, instance, view, proj, null, null);
+        if (baseline != null) {
+            InstanceDiff diff = InstanceDiff.between(StaticProjector.project(baseline, proj), now.instance);
+            now.mark(diff);
+            new StaticGraphMaker(graph, baseline, view, proj, now, diff);
+        }
         Set<AlloyType> distinctTypes = findNonIntAtoms(instance);
         if (distinctTypes.isEmpty()) {
             new GraphNode(graph, "", "No atoms found");
@@ -173,7 +224,9 @@ public final class StaticGraphMaker {
      * The constructor takes an Instance and a View, then insert the generate
      * graph(s) into a blank cartoon.
      */
-    private StaticGraphMaker(Graph graph, AlloyInstance originalInstance, VizState view, AlloyProjection proj) throws ErrorFatal {
+    private StaticGraphMaker(Graph graph, AlloyInstance originalInstance, VizState view, AlloyProjection proj, StaticGraphMaker shown, InstanceDiff diff) throws ErrorFatal {
+        this.shown = shown;
+        this.diff = diff;
         final boolean hidePrivate = view.hidePrivate();
         final boolean hideMeta = view.hideMeta();
         final boolean hideSkolem = view.hideSkolem();
@@ -234,6 +287,8 @@ public final class StaticGraphMaker {
                     if (s.length() > 0)
                         e.getKey().addLabel(s);
         }
+        if (shown != null)
+            return; // the legend describes the instance that is shown
         for (Map.Entry<AlloyRelation,Integer> e : rels.entrySet()) {
             Color c = magicColor.get(e.getKey());
             if (c == null)
@@ -252,6 +307,11 @@ public final class StaticGraphMaker {
      * @return null if the atom is explicitly marked as "Don't Show".
      */
     private GraphNode createNode(final boolean hidePrivate, final boolean hideMeta, final boolean hideSkolem, final AlloyAtom atom, Color magicColor) {
+        if (shown != null) {
+            GraphNode same = shown.name2node.get(atom.getOriginalName());
+            if (same != null)
+                return same;
+        }
         GraphNode node = atom2node.get(atom);
         if (node != null) {
             DotColor color = view.nodeColor(atom, instance);
@@ -293,8 +353,11 @@ public final class StaticGraphMaker {
                 attribs.put(node, list = new TreeSet<String>());
             list.add("(" + setsLabel + ")");
         }
+        if (shown != null)
+            node.set(DiffMark.REMOVED);
         nodes.put(node, atom);
         atom2node.put(atom, node);
+        name2node.put(atom.getOriginalName(), node);
         return node;
     }
 
@@ -312,6 +375,8 @@ public final class StaticGraphMaker {
         // intermediate nodes.
         // eg. Say a given tuple is (A,B,C,D) from the relation R.
         // An edge will be drawn from A to D, with the label "R [B, C]"
+        if (shown != null && !diff.isRemoved(rel, tuple))
+            return false;
         if ((hidePrivate && tuple.getStart().getType().isPrivate) || (hideMeta && tuple.getStart().getType().isMeta) || !view.nodeVisible(tuple.getStart(), instance))
             return false;
         if ((hidePrivate && tuple.getEnd().getType().isPrivate) || (hideMeta && tuple.getEnd().getType().isMeta) || !view.nodeVisible(tuple.getEnd(), instance))
@@ -347,6 +412,8 @@ public final class StaticGraphMaker {
         e.set(style);
         e.set(dir != DotDirection.FORWARD, dir != DotDirection.BACK);
         e.set(weight < 1 ? 1 : (weight > 100 ? 10000 : 100 * weight));
+        if (shown != null)
+            e.set(DiffMark.REMOVED).set(1); // a ghost gives way to the edges that are there
         edges.put(e, tuple);
         return true;
     }

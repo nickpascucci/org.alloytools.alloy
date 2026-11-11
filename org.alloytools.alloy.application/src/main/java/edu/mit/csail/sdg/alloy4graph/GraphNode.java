@@ -303,6 +303,20 @@ public final strictfp class GraphNode {
         graph.layerlist.get(layer).add(this);
     }
 
+    /** How this node differs from the graph it is compared with; never null. */
+    private DiffMark diffMark = DiffMark.NONE;
+
+    /** Sets how this node differs from the graph it is compared with. */
+    public GraphNode set(DiffMark mark) {
+        diffMark = mark == null ? DiffMark.NONE : mark;
+        return this;
+    }
+
+    /** Returns how this node differs from the graph it is compared with. */
+    public DiffMark diffMark() {
+        return diffMark;
+    }
+
     /** Sets the name that identifies this node across graphs (can be null). */
     public GraphNode setLayoutKey(String key) {
         layoutKey = key;
@@ -497,20 +511,29 @@ public final strictfp class GraphNode {
         else if (updown < 0)
             calcBounds();
         final int top = graph.getTop(), left = graph.getLeft();
-        gr.set(style, scale);
+        final boolean round = shape == DotShape.CIRCLE || shape == DotShape.M_CIRCLE || shape == DotShape.DOUBLE_CIRCLE;
+        final boolean ghost = diffMark == DiffMark.REMOVED;
+        final Color outline = ghost ? DiffMark.fade(Color.BLACK) : Color.BLACK;
+        int radius = 0;
+        if (round) {
+            int hw = width / 2, hh = height / 2;
+            radius = ((int) (sqrt(hw * ((double) hw) + ((double) hh) * hh))) + 2;
+            if (shape == DotShape.DOUBLE_CIRCLE)
+                radius = radius + 5;
+        }
         gr.translate(centerX - left, centerY - top);
+        if (ghost)
+            gr.setStroke(1.3f, ghostDash, scale);
+        else
+            gr.set(style, scale);
         gr.setFont(fontBold);
         if (highlight)
             gr.setColor(COLOR_CHOSENNODE);
         else
-            gr.setColor(color);
-        if (shape == DotShape.CIRCLE || shape == DotShape.M_CIRCLE || shape == DotShape.DOUBLE_CIRCLE) {
-            int hw = width / 2, hh = height / 2;
-            int radius = ((int) (sqrt(hw * ((double) hw) + ((double) hh) * hh))) + 2;
-            if (shape == DotShape.DOUBLE_CIRCLE)
-                radius = radius + 5;
+            gr.setColor(ghost ? DiffMark.fade(color) : color);
+        if (round) {
             gr.fillCircle(radius);
-            gr.setColor(Color.BLACK);
+            gr.setColor(outline);
             gr.drawCircle(radius);
             if (style == DotStyle.DOTTED || style == DotStyle.DASHED)
                 gr.set(DotStyle.SOLID, scale);
@@ -525,7 +548,7 @@ public final strictfp class GraphNode {
                 gr.drawCircle(radius - 5);
         } else {
             gr.draw(poly, true);
-            gr.setColor(Color.BLACK);
+            gr.setColor(outline);
             gr.draw(poly, false);
             if (poly2 != null)
                 gr.draw(poly2, false);
@@ -548,7 +571,10 @@ public final strictfp class GraphNode {
         }
         gr.set(DotStyle.SOLID, scale);
         int clr = color.getRGB() & 0xFFFFFF;
-        gr.setColor((clr == 0x000000 || clr == 0xff0000 || clr == 0x0000ff) ? Color.WHITE : Color.BLACK);
+        if (ghost)
+            gr.setColor(Color.GRAY);
+        else
+            gr.setColor((clr == 0x000000 || clr == 0xff0000 || clr == 0x0000ff) ? Color.WHITE : Color.BLACK);
         if (labels != null && labels.size() > 0) {
             int x = (-width / 2), y = yShift + (-labels.size() * ad / 2);
             for (int i = 0; i < labels.size(); i++) {
@@ -564,7 +590,69 @@ public final strictfp class GraphNode {
                 y = y + ad;
             }
         }
+        if (diffMark != DiffMark.NONE) {
+            // The badge sits on the top right corner; on a circle, where the corner would be.
+            int bx = round ? (int) (radius * 0.7) : side, by = round ? (int) (-radius * 0.7) : -updown;
+            gr.translate(bx, by);
+            drawBadge(gr, diffMark, scale);
+            gr.translate(-bx, -by);
+        }
         gr.translate(left - centerX, top - centerY);
+    }
+
+    /**
+     * Draws the halo of this node if it is new or changed. The halo is a wide
+     * outline, the inner half of which draw() then covers; it is to be drawn before
+     * the edges, so that it does not hide where they meet the node.
+     */
+    void drawHalo(Artist gr, double scale) {
+        if (shape == null || (diffMark != DiffMark.ADDED && diffMark != DiffMark.CHANGED))
+            return;
+        else if (updown < 0)
+            calcBounds();
+        final int top = graph.getTop(), left = graph.getLeft();
+        gr.translate(centerX - left, centerY - top);
+        gr.setStroke(haloWidth, null, scale);
+        gr.setColor(diffMark.color);
+        if (shape == DotShape.CIRCLE || shape == DotShape.M_CIRCLE || shape == DotShape.DOUBLE_CIRCLE) {
+            int hw = width / 2, hh = height / 2;
+            gr.drawCircle(((int) (sqrt(hw * ((double) hw) + ((double) hh) * hh))) + (shape == DotShape.DOUBLE_CIRCLE ? 7 : 2));
+        } else
+            gr.draw(poly, false);
+        gr.set(DotStyle.SOLID, scale);
+        gr.translate(left - centerX, top - centerY);
+    }
+
+    /** The width of the outline that makes the halo of a new or changed node. */
+    private static final float   haloWidth = 9f;
+
+    /**
+     * The dash pattern of a ghost; longer than that of DotStyle.DASHED, which the
+     * default theme gives to variable sigs.
+     */
+    static final float[]         ghostDash = new float[] {
+                                                          10f, 6f
+    };
+
+    /**
+     * Draws, centered on the origin, the badge that tells the given mark apart
+     * without relying on color: a plus for ADDED, a minus for REMOVED and a dot for
+     * CHANGED.
+     */
+    static void drawBadge(Artist gr, DiffMark mark, double scale) {
+        if (mark == DiffMark.NONE)
+            return;
+        gr.setColor(mark.color);
+        gr.fillCircle(6);
+        gr.setColor(Color.WHITE);
+        gr.setStroke(2f, null, scale);
+        if (mark == DiffMark.CHANGED)
+            gr.fillCircle(2);
+        else
+            gr.drawLine(-3, 0, 3, 0);
+        if (mark == DiffMark.ADDED)
+            gr.drawLine(0, -3, 0, 3);
+        gr.set(DotStyle.SOLID, scale);
     }
 
     /**

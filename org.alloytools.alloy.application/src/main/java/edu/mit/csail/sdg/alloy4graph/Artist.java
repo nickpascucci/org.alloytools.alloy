@@ -170,6 +170,20 @@ public final strictfp class Artist {
             gr.draw(shape);
     }
 
+    /**
+     * Changes the line style to the given width and dash pattern (null for a solid
+     * line); it stays until the next call to this method or to set(DotStyle,
+     * double).
+     */
+    public void setStroke(float width, float[] dash, double scale) {
+        if (gr == null)
+            pdf.setLine(width, dash);
+        else if (dash == null)
+            gr.setStroke(new BasicStroke(scale > 1 ? (float) (width / scale) : width));
+        else
+            gr.setStroke(new BasicStroke(scale > 1 ? (float) (width / scale) : width, CAP_ROUND, JOIN_ROUND, 15f, dash, 0f));
+    }
+
     /** The pattern for dotted line. */
     private static float[] dot    = new float[] {
                                                  1f, 3f

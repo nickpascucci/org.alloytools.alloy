@@ -63,6 +63,7 @@ import javax.swing.BoxLayout;
 import javax.swing.Icon;
 import javax.swing.JButton;
 import javax.swing.JComponent;
+import javax.swing.JLabel;
 import javax.swing.JFrame;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
@@ -93,6 +94,7 @@ import edu.mit.csail.sdg.alloy4.OurUtil;
 import edu.mit.csail.sdg.alloy4.Runner;
 import edu.mit.csail.sdg.alloy4.Util;
 import edu.mit.csail.sdg.alloy4.Version;
+import edu.mit.csail.sdg.alloy4graph.DiffMark;
 import edu.mit.csail.sdg.alloy4graph.GraphViewer;
 import edu.mit.csail.sdg.alloy4graph.LayoutTemplate;
 import edu.mit.csail.sdg.ast.Expr;
@@ -188,7 +190,10 @@ public final class VizGUI implements ComponentListener {
     private final JMenuItem     initMenu;
 
     /** The trace navigation menu items. */
-    private final JMenuItem     rightNavMenu, leftNavMenu;
+    private final JMenuItem     rightNavMenu, leftNavMenu, changesMenu;
+
+    /** The button that turns the highlighting of changes on and off. */
+    private JButton             changesButton;
 
     /** Current font size. */
     private int                 fontSize        = 12;
@@ -671,6 +676,7 @@ public final class VizGUI implements ComponentListener {
             // [electrum] trace navigation buttons
             leftNavMenu = menuItem(instanceMenu, "Show Previous State", KeyEvent.VK_LEFT, KeyEvent.VK_LEFT, doNavLeft());
             rightNavMenu = menuItem(instanceMenu, "Show Next State", KeyEvent.VK_RIGHT, KeyEvent.VK_RIGHT, doNavRight());
+            changesMenu = menuItem(instanceMenu, "Highlight Changes", 'H', 'H', doToggleChanges());
             thememenu = menu(mb, "&Theme", doRefreshTheme());
             if (standalone || windowmenu == null)
                 windowmenu = menu(mb, "&Window", doRefreshWindow());
@@ -730,6 +736,7 @@ public final class VizGUI implements ComponentListener {
             // [electrum] trace navigation buttons
             toolbar.add(leftNavButton = OurUtil.button(new String(Character.toChars(0x2190)), "Show the previous state", "images/24_history.gif", doNavLeft()));
             toolbar.add(rightNavButton = OurUtil.button(new String(Character.toChars(0x2192)), "Show the next state", "images/24_history.gif", doNavRight()));
+            toolbar.add(changesButton = OurUtil.button("Changes", "Highlight what changed from the previous state or solution", "images/24_changes.gif", doToggleChanges()));
             toolbar.add(projectionButton);
             toolbar.add(loadSettingsButton = OurUtil.button("Load", "Load the theme customization from a theme file", "images/24_open.gif", doLoadTheme()));
             toolbar.add(saveSettingsButton = OurUtil.button("Save", "Save the current theme customization", "images/24_save.gif", doSaveTheme()));
@@ -993,6 +1000,7 @@ public final class VizGUI implements ComponentListener {
                 break;
             }
             default : {
+                continuity.setShowChanges(ShowChanges.get() != 0);
                 if (myGraphPanel == null || numPanes != myGraphPanel.numPanels())
                     myGraphPanel = new VizGraphPanel(frame, myStates, false, continuity, current);
                 myGraphPanel.setFirstState(current);
@@ -1017,6 +1025,17 @@ public final class VizGUI implements ComponentListener {
             content.add(instanceTopBox, BorderLayout.NORTH);
             content.add(aux, BorderLayout.CENTER);
             content.setVisible(true);
+        }
+
+        changesButton.setVisible(!isMeta && currentMode == VisualizerMode.Viz && settingsOpen == 0);
+        changesButton.setText(ShowChanges.get() != 0 ? "Changes: On" : "Changes: Off");
+        changesMenu.setEnabled(!isMeta && currentMode == VisualizerMode.Viz);
+        changesMenu.setText(ShowChanges.get() != 0 ? "Stop Highlighting Changes" : "Highlight Changes");
+        if (!isMeta && currentMode == VisualizerMode.Viz && ShowChanges.get() != 0) {
+            JPanel withKey = new JPanel(new BorderLayout());
+            withKey.add(content, BorderLayout.CENTER);
+            withKey.add(changesKey(), BorderLayout.SOUTH);
+            content = withKey;
         }
 
         // Now that we've re-constructed "content", let's set its font size
@@ -1796,6 +1815,37 @@ public final class VizGUI implements ComponentListener {
         if (!wrap && frame != null)
             OurUtil.zoom(frame);
         return wrapMe();
+    }
+
+    /** Whether changes between states and between solutions are highlighted. */
+    private static final IntPref ShowChanges = new IntPref("VizShowChanges", 0, 1, 1);
+
+    /** Turns the highlighting of changes on or off. */
+    private Runner doToggleChanges() {
+        if (wrap)
+            return wrapMe();
+        ShowChanges.set(ShowChanges.get() == 0 ? 1 : 0);
+        updateDisplay();
+        return null;
+    }
+
+    /**
+     * Returns the strip that explains the marks of highlighted changes.
+     */
+    private JComponent changesKey() {
+        StringBuilder sb = new StringBuilder("<html>Compared with the previous " + (continuity.size() > 1 ? "state" : "solution") + ":");
+        String[] names = {
+                          "+ added", "\u2212 removed (shown faded and dashed)", "\u2022 changed"
+        };
+        DiffMark[] marks = {
+                            DiffMark.ADDED, DiffMark.REMOVED, DiffMark.CHANGED
+        };
+        for (int i = 0; i < marks.length; i++)
+            sb.append(String.format(" &nbsp; <b><font color='#%06x'>%s</font></b>", marks[i].color.getRGB() & 0xFFFFFF, names[i]));
+        JLabel key = new JLabel(sb.append("</html>").toString());
+        key.setBorder(javax.swing.BorderFactory.createEmptyBorder(2, 8, 2, 8));
+        key.setFont(OurUtil.getVizFont().deriveFont(11f));
+        return key;
     }
 
     /**

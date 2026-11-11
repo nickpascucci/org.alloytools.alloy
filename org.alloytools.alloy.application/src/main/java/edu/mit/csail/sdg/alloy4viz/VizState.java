@@ -257,10 +257,7 @@ public final class VizState {
             return ans;
         AlloyInstance inst = originalInstance;
         try {
-            if (context == null)
-                ans = StaticGraphMaker.produceGraph(parent, inst, this, projectionChoice);
-            else
-                ans = StaticGraphMaker.produceGraph(parent, inst, this, projectionChoice, context.template, context.strict);
+            ans = StaticGraphMaker.produceGraph(parent, inst, this, projectionChoice, context);
             cache.put(projectionChoice, ans);
             cachedContext.put(projectionChoice, context);
         } catch (Throwable ex) {

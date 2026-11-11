@@ -113,4 +113,52 @@ public class ContinuityTest {
         c.start(fixed);
         assertNull(c.earlierTemplate(new AlloyProjection()));
     }
+
+    @Test
+    public void eachTraceStateIsComparedWithTheOneBeforeIt() {
+        Continuity c = new Continuity();
+        c.start(trace);
+        VizState view = new VizState(trace.get(0));
+        int n = trace.size();
+        assertNull(c.contextFor(0, view, new AlloyProjection()).baseline);
+        assertSame(trace.get(0), c.contextFor(1, view, new AlloyProjection()).baseline);
+        assertSame(trace.get(2), c.contextFor(3, view, new AlloyProjection()).baseline);
+        assertSame("the step that closes the loop", trace.get(n - 1), c.contextFor(n, view, new AlloyProjection()).baseline);
+    }
+
+    @Test
+    public void nothingIsComparedWhenChangesAreNotShown() {
+        Continuity c = new Continuity();
+        c.start(trace);
+        VizState view = new VizState(trace.get(0));
+        GraphContext marked = c.contextFor(1, view, new AlloyProjection());
+        c.setShowChanges(false);
+        GraphContext plain = c.contextFor(1, view, new AlloyProjection());
+        assertNull(plain.baseline);
+        assertSame("the arrangement stays", marked.template, plain.template);
+        c.setShowChanges(true);
+        assertSame(trace.get(0), c.contextFor(1, view, new AlloyProjection()).baseline);
+    }
+
+    @Test
+    public void theNextSolutionIsComparedWithTheOneBeforeIt() {
+        Continuity c = new Continuity();
+        c.start(fixed);
+        VizState view = new VizState(fixed.get(0));
+        assertNull(c.contextFor(0, view, new AlloyProjection()).baseline);
+        List<AlloyInstance> next = Collections.singletonList(trace.get(0));
+        c.advance(next, Collections.<AlloyProjection,LayoutTemplate> emptyMap());
+        assertSame(fixed.get(0), c.contextFor(0, new VizState(next.get(0)), new AlloyProjection()).baseline);
+    }
+
+    @Test
+    public void theFirstStateOfTheNextTraceIsComparedWithTheFirstStateBeforeIt() throws Exception {
+        List<AlloyInstance> again = TraceFixture.states(TraceFixture.TRASH);
+        Continuity c = new Continuity();
+        c.start(trace);
+        c.advance(again, Collections.<AlloyProjection,LayoutTemplate> emptyMap());
+        VizState view = new VizState(again.get(0));
+        assertSame(trace.get(0), c.contextFor(0, view, new AlloyProjection()).baseline);
+        assertSame(again.get(0), c.contextFor(1, view, new AlloyProjection()).baseline);
+    }
 }

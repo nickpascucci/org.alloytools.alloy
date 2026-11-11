@@ -17,8 +17,15 @@ public final class GraphContext {
      */
     public final boolean        strict;
 
-    GraphContext(LayoutTemplate template, boolean strict) {
+    /**
+     * The instance whose differences from the drawn one are to be marked; null
+     * means that nothing is marked.
+     */
+    public final AlloyInstance  baseline;
+
+    GraphContext(LayoutTemplate template, boolean strict, AlloyInstance baseline) {
         this.template = template;
         this.strict = strict;
+        this.baseline = baseline;
     }
 }
