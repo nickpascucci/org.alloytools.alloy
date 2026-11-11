@@ -24,11 +24,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 import edu.mit.csail.sdg.alloy4.Pair;
 import edu.mit.csail.sdg.alloy4.Util;
@@ -101,6 +103,12 @@ public final strictfp class Graph {
 
     /** The height of each layer. */
     int[]                         layerPH          = null;
+
+    /**
+     * If not null, the drawing area always includes the drawing area of this
+     * template, so that graphs laid out onto one template line up on screen.
+     */
+    private LayoutTemplate        pinned           = null;
 
     /**
      * The list of layers; must stay in sync with GraphNode.graph and
@@ -441,6 +449,7 @@ public final strictfp class Graph {
         final IdentityHashMap<GraphNode,Object> map = new IdentityHashMap<GraphNode,Object>();
         final double[] bc = new double[nodes.size() + 1];
         int i = 1;
+        keepPreferredOrder(0);
         for (GraphNode n : layer(0)) {
             bc[n.pos()] = i;
             i++;
@@ -476,6 +485,7 @@ public final strictfp class Graph {
                         return 1;
                 }
             });
+            keepPreferredOrder(layer + 1);
             int j = 1;
             for (GraphNode n : layer(layer + 1)) {
                 bc[n.pos()] = j;
@@ -539,6 +549,8 @@ public final strictfp class Graph {
             ans += ((double) e.weight()) * e.a().x();
         for (GraphEdge e : n.outs)
             ans += ((double) e.weight()) * e.b().x();
+        if (n.preferredX != null)
+            ans += ((double) pull(n)) * n.preferredX;
         return ans / wt;
     }
 
@@ -553,7 +565,23 @@ public final strictfp class Graph {
             ans += e.weight();
         for (GraphEdge e : n.outs)
             ans += e.weight();
+        if (n.preferredX != null)
+            ans += pull(n);
         return ans;
+    }
+
+    /**
+     * The weight of the pull of a node towards its preferred X: as much as all its
+     * edges together, so that it settles midway between its old place and the
+     * place its neighbors ask for.
+     */
+    private static int pull(GraphNode n) {
+        int ans = 0;
+        for (GraphEdge e : n.ins)
+            ans += e.weight();
+        for (GraphEdge e : n.outs)
+            ans += e.weight();
+        return ans < 1 ? 1 : ans;
     }
 
     /**
@@ -703,8 +731,176 @@ public final strictfp class Graph {
 
     // ============================================================================================================================//
 
-    /** (Re-)perform the layout. */
+    /**
+     * (Re-)perform the layout so that nodes land where the given template has them.
+     * <p>
+     * With strict, every node takes the exact layer and X of its template slot, so
+     * a sequence of graphs laid out against one template shows each entity in one
+     * place. This needs a slot for every node and no edge inside a single template
+     * layer; otherwise the layout is done as if strict were false.
+     * <p>
+     * Without strict, layers are computed afresh, and nodes that have a slot keep
+     * their left-to-right order within a layer and are pulled towards their old X.
+     *
+     * @param template the earlier layout to follow (null means a fresh layout)
+     */
+    public void layout(LayoutTemplate template, boolean strict) {
+        if (template == null || nodes.size() == 0) {
+            layout();
+            return;
+        }
+        if (strict && fits(template)) {
+            layoutOnto(template);
+            return;
+        }
+        for (GraphNode n : nodes) {
+            LayoutTemplate.Slot slot = template.slot(n.layoutKey());
+            n.preferredX = slot == null ? null : Integer.valueOf(slot.x);
+        }
+        layoutAfresh();
+    }
+
+    /**
+     * Returns true if every node has a slot in the template and every edge joins
+     * two different template layers.
+     */
+    private boolean fits(LayoutTemplate template) {
+        for (GraphNode n : nodes)
+            if (template.slot(n.layoutKey()) == null)
+                return false;
+        for (GraphEdge e : edges)
+            if (e.a() != e.b() && template.slot(e.a().layoutKey()).layer == template.slot(e.b().layoutKey()).layer)
+                return false;
+        return true;
+    }
+
+    /**
+     * Puts every node on its template slot, then routes the edges. Assumes
+     * fits(template).
+     */
+    private void layoutOnto(LayoutTemplate template) {
+        final List<GraphNode> real = new ArrayList<GraphNode>(nodes);
+        for (GraphNode n : real)
+            n.calcBounds();
+        // Template layers that are unused here are squeezed out, since the rest of
+        // this class assumes that no layer is empty.
+        final TreeSet<Integer> used = new TreeSet<Integer>();
+        for (GraphNode n : real)
+            used.add(template.slot(n.layoutKey()).layer);
+        final List<Integer> rank = new ArrayList<Integer>(used);
+        for (GraphNode n : real) {
+            LayoutTemplate.Slot slot = template.slot(n.layoutKey());
+            n.setLayer(rank.indexOf(slot.layer));
+            n.setX(slot.x);
+            n.setY(slot.y);
+        }
+        final List<GraphNode> order = new ArrayList<GraphNode>(real);
+        Collections.sort(order, new Comparator<GraphNode>() {
+
+            @Override
+            public int compare(GraphNode o1, GraphNode o2) {
+                if (o1.layer() != o2.layer())
+                    return o1.layer() < o2.layer() ? -1 : 1;
+                return o1.x() < o2.x() ? -1 : (o1.x() > o2.x() ? 1 : 0);
+            }
+        });
+        sortNodes(order);
+        layout_backEdges();
+        layout_dummyNodesIfNeeded();
+        layerPH = new int[layers()];
+        for (int i = 0; i < layers(); i++) {
+            layerPH[i] = template.layerHeight(rank.get(i));
+            for (GraphNode n : layer(i))
+                if (layerPH[i] < n.getHeight())
+                    layerPH[i] = n.getHeight();
+        }
+        // Each chain of dummy nodes goes on the straight line between its two ends,
+        // stepping aside where that line would run through a node.
+        for (GraphEdge first : new ArrayList<GraphEdge>(edges))
+            if (first.a().shape() != null && first.b().shape() == null) {
+                GraphNode a = first.a(), b = first.b();
+                while (b.shape() == null)
+                    b = b.outs.get(0).b();
+                final int ay = a.y(), by = b.y();
+                for (GraphNode d = first.b(); d.shape() == null; d = d.outs.get(0).b()) {
+                    int y = real.get(0).y();
+                    for (GraphNode n : layer(d.layer()))
+                        if (n.shape() != null)
+                            y = n.y();
+                    d.setY(y);
+                    d.setX(by == ay ? a.x() : a.x() + (int) ((b.x() - a.x()) * ((double) (y - ay)) / (by - ay)));
+                    for (int tries = 0; tries < 3; tries++)
+                        for (GraphNode n : layer(d.layer())) {
+                            int lo = n.x() - n.getWidth() / 2 - 5, hi = n.x() + n.getWidth() / 2 + n.getReserved() + 5;
+                            if (n.shape() != null && d.x() > lo && d.x() < hi)
+                                d.setX(d.x() - lo < hi - d.x() ? lo : hi);
+                        }
+                }
+            }
+        for (int i = 0; i < layers(); i++)
+            sortLayer(i, new Comparator<GraphNode>() {
+
+                @Override
+                public int compare(GraphNode o1, GraphNode o2) {
+                    return o1.x() < o2.x() ? -1 : (o1.x() > o2.x() ? 1 : 0);
+                }
+            });
+        relayout_edges(false);
+        pinned = template;
+        recalcBound(true);
+    }
+
+    /**
+     * Within the given layer, the nodes that have a preferred X trade places among
+     * themselves so that they are ordered by it; all other nodes stay where they
+     * are.
+     */
+    private void keepPreferredOrder(int layer) {
+        final List<GraphNode> list = layerlist.get(layer);
+        final List<GraphNode> known = new ArrayList<GraphNode>();
+        for (GraphNode n : list)
+            if (n.preferredX != null)
+                known.add(n);
+        if (known.size() < 2)
+            return;
+        Collections.sort(known, new Comparator<GraphNode>() {
+
+            @Override
+            public int compare(GraphNode o1, GraphNode o2) {
+                return o1.preferredX.compareTo(o2.preferredX);
+            }
+        });
+        int k = 0;
+        for (int i = 0; i < list.size(); i++)
+            if (list.get(i).preferredX != null)
+                list.set(i, known.get(k++));
+    }
+
+    /**
+     * Assuming layout has been performed, this records where each node with a
+     * layout key is.
+     */
+    public LayoutTemplate captureTemplate() {
+        final Map<String,LayoutTemplate.Slot> slots = new LinkedHashMap<String,LayoutTemplate.Slot>();
+        for (GraphNode n : nodes)
+            if (n.shape() != null && n.layoutKey() != null)
+                slots.put(n.layoutKey(), new LayoutTemplate.Slot(n.layer(), n.x(), n.y()));
+        return new LayoutTemplate(slots, layerPH == null ? new int[0] : layerPH, left, top, totalWidth, totalHeight);
+    }
+
+    /** (Re-)perform the layout, with no regard to any earlier layout. */
     public void layout() {
+        for (GraphNode n : nodes)
+            n.preferredX = null;
+        layoutAfresh();
+    }
+
+    /**
+     * Computes layers, order and coordinates from the structure of the graph; nodes
+     * with a preferred X keep their mutual order and lean towards it.
+     */
+    private void layoutAfresh() {
+        pinned = null;
 
         // The rest of the code below assumes at least one node, so we return
         // right away if nodes.size()==0
@@ -834,6 +1030,14 @@ public final strictfp class Graph {
                 bottom = bottom + (legendHeight - totalHeight);
                 totalHeight = legendHeight;
             }
+        }
+        if (pinned != null) {
+            int right = Math.max(left + totalWidth, pinned.left + pinned.width);
+            left = Math.min(left, pinned.left);
+            totalWidth = right - left;
+            bottom = Math.max(bottom, pinned.top + pinned.height);
+            top = Math.min(top, pinned.top);
+            totalHeight = bottom - top;
         }
     }
 

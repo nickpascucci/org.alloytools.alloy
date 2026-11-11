@@ -260,6 +260,23 @@ public final class VizGraphPanel extends JPanel {
      *            it rendered as a graph
      */
     public VizGraphPanel(JFrame parent, List<VizState> vizState, boolean seeDot) {
+        this(parent, vizState, seeDot, null, 0);
+    }
+
+    /**
+     * Create a splitpane showing the graphs on top, as well as projection
+     * comboboxes on the bottom.
+     *
+     * @param vizState - the current visualization settings
+     * @param seeDot - true if we want to see the DOT source code, false if we want
+     *            it rendered as a graph
+     * @param continuity - what keeps the graphs consistent with each other (null if
+     *            nothing does)
+     * @param firstState - the index of the state shown by the first graph
+     */
+    public VizGraphPanel(JFrame parent, List<VizState> vizState, boolean seeDot, Continuity continuity, int firstState) {
+        this.continuity = continuity;
+        this.firstState = firstState;
         Border b = new EmptyBorder(0, 0, 0, 0);
         OurUtil.make(this, Color.BLACK, Color.WHITE, b);
         this.seeDot = seeDot;
@@ -336,6 +353,28 @@ public final class VizGraphPanel extends JPanel {
         return diagramScrollPanel;
     }
 
+    /** What keeps the graphs consistent with each other; null if nothing does. */
+    private final Continuity continuity;
+
+    /** The index of the state shown by the first graph. */
+    private int              firstState;
+
+    /** Sets the index of the state shown by the first graph; takes effect at the next remakeAll. */
+    public void setFirstState(int firstState) {
+        this.firstState = firstState;
+    }
+
+    /** Returns the projection currently shown. */
+    public AlloyProjection currentProjection() {
+        return currentProjection;
+    }
+
+    /** Returns the graph of the i-th panel under the current projection. */
+    private JPanel graphOf(JFrame parent, int i) {
+        GraphContext context = continuity == null ? null : continuity.contextFor(firstState + i, vizState.get(0), currentProjection);
+        return vizState.get(i).getGraph(parent, currentProjection, context);
+    }
+
     /** Regenerate the comboboxes and the graph. */
     public void remakeAll(JFrame parent) {
         Map<AlloyType,AlloyAtom> map = new LinkedHashMap<AlloyType,AlloyAtom>();
@@ -360,7 +399,7 @@ public final class VizGraphPanel extends JPanel {
         // [electrum] update all graph panels
         viewer = new ArrayList<>(vizState.size());
         for (int i = 0; i < vizState.size(); i++) {
-            JPanel graph = vizState.get(i).getGraph(parent, currentProjection);
+            JPanel graph = graphOf(parent, i);
             if (seeDot && (graph instanceof GraphViewer)) {
                 viewer = null;
                 JTextArea txt = OurUtil.textarea(graph.toString(), 10, 10, false, true, getFont());
@@ -368,8 +407,8 @@ public final class VizGraphPanel extends JPanel {
             } else {
                 if (graph instanceof GraphViewer) {
                     viewer.add((GraphViewer) graph);
-                    if (prevsv != null && i <= prevsv.size())
-                        viewer.get(i).setScale(((GraphViewer) graph).getScale());
+                    if (prevsv != null && i < prevsv.size() && prevsv.get(i) != graph)
+                        ((GraphViewer) graph).setScale(prevsv.get(i).getScale());
                 } else
                     viewer = null;
                 graphPanels.get(i).removeAll();
@@ -403,7 +442,7 @@ public final class VizGraphPanel extends JPanel {
 
     public String toDot(JFrame parent) {
         // [electrum] only converts the first shown state
-        return vizState.get(0).getGraph(parent, currentProjection).toString();
+        return graphOf(parent, 0).toString();
     }
 
     /**
@@ -411,6 +450,8 @@ public final class VizGraphPanel extends JPanel {
      * the graph hasn't loaded yet)
      */
     public GraphViewer alloyGetViewer() {
+        if (viewer == null || viewer.isEmpty())
+            return null;
         return viewer.get(0);
     }
 

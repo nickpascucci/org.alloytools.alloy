@@ -108,6 +108,17 @@ public final strictfp class GraphNode {
     public final Object         uuid;
 
     /**
+     * A name that identifies this node across different graphs (can be null); a
+     * LayoutTemplate uses it to give the same entity the same place in each graph.
+     */
+    private String              layoutKey = null;
+
+    /**
+     * The X coordinate that layout should pull this node towards (null if none).
+     */
+    Integer                     preferredX = null;
+
+    /**
      * The X coordinate of the center of the node; modified by tweak(),
      * layout_computeX(), layout(), and relayout_edges()
      */
@@ -290,6 +301,17 @@ public final strictfp class GraphNode {
         while (layer >= graph.layerlist.size())
             graph.layerlist.add(new ArrayList<GraphNode>());
         graph.layerlist.get(layer).add(this);
+    }
+
+    /** Sets the name that identifies this node across graphs (can be null). */
+    public GraphNode setLayoutKey(String key) {
+        layoutKey = key;
+        return this;
+    }
+
+    /** Returns the name that identifies this node across graphs (can be null). */
+    public String layoutKey() {
+        return layoutKey;
     }
 
     /**

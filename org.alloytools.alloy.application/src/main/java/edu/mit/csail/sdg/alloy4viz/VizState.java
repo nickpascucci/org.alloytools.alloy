@@ -18,7 +18,9 @@ package edu.mit.csail.sdg.alloy4viz;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -172,6 +174,7 @@ public final class VizState {
             if (edgeStyle.get(r) == null && r.isVar)
                 edgeStyle.put(r, DotStyle.DASHED);
         // Done
+        themeVersion++;
         cache.clear();
         changedSinceLastSave = false;
     }
@@ -214,6 +217,7 @@ public final class VizState {
     public void loadPaletteXML(String filename) throws IOException {
         resetTheme();
         StaticThemeReaderWriter.readAlloy(filename, this);
+        themeVersion++;
         cache.clear();
         changedSinceLastSave = false;
     }
@@ -237,13 +241,28 @@ public final class VizState {
      * settings.
      */
     public JPanel getGraph(JFrame parent, AlloyProjection projectionChoice) {
+        return getGraph(parent, projectionChoice, null);
+    }
+
+    /** For each cached graph, the context it was generated in. */
+    private final Map<AlloyProjection,GraphContext> cachedContext = new HashMap<AlloyProjection,GraphContext>();
+
+    /**
+     * Generate a VizGraphPanel for a given projection choice, using the current
+     * settings, drawn in the given context (null if it stands alone).
+     */
+    public JPanel getGraph(JFrame parent, AlloyProjection projectionChoice, GraphContext context) {
         JPanel ans = cache.get(projectionChoice);
-        if (ans != null)
+        if (ans != null && cachedContext.get(projectionChoice) == context)
             return ans;
         AlloyInstance inst = originalInstance;
         try {
-            ans = StaticGraphMaker.produceGraph(parent, inst, this, projectionChoice);
+            if (context == null)
+                ans = StaticGraphMaker.produceGraph(parent, inst, this, projectionChoice);
+            else
+                ans = StaticGraphMaker.produceGraph(parent, inst, this, projectionChoice, context.template, context.strict);
             cache.put(projectionChoice, ans);
+            cachedContext.put(projectionChoice, context);
         } catch (Throwable ex) {
             String msg = "An error has occurred: " + ex + "\n\nStackTrace:\n" + MailBug.dump(ex) + "\n";
             JScrollPane scroll = OurUtil.scrollpane(OurUtil.textarea(msg, 0, 0, false, false));
@@ -270,7 +289,19 @@ public final class VizState {
      */
     private void change() {
         changedSinceLastSave = true;
+        themeVersion++;
         cache.clear();
+    }
+
+    /** Counts the changes made to the theme. */
+    private int themeVersion = 0;
+
+    /**
+     * Returns a number that is different after each change to the theme, so that
+     * things derived from the theme can tell when they are out of date.
+     */
+    public int themeVersion() {
+        return themeVersion;
     }
 
     /**

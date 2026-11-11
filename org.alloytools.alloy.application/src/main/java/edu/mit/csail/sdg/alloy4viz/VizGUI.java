@@ -94,6 +94,7 @@ import edu.mit.csail.sdg.alloy4.Runner;
 import edu.mit.csail.sdg.alloy4.Util;
 import edu.mit.csail.sdg.alloy4.Version;
 import edu.mit.csail.sdg.alloy4graph.GraphViewer;
+import edu.mit.csail.sdg.alloy4graph.LayoutTemplate;
 import edu.mit.csail.sdg.ast.Expr;
 import edu.mit.csail.sdg.ast.ExprConstant;
 import edu.mit.csail.sdg.ast.ExprVar;
@@ -946,7 +947,7 @@ public final class VizGUI implements ComponentListener {
                     if (current + i < 0) {
                         getVizState().set(i, null);
                     } else {
-                        AlloyInstance myInstance = StaticInstanceReader.parseInstance(f, current + i);
+                        AlloyInstance myInstance = continuity.state(current + i);
                         if (getVizState().get(i) != null)
                             getVizState().get(i).loadInstance(myInstance);
                         else {
@@ -993,7 +994,8 @@ public final class VizGUI implements ComponentListener {
             }
             default : {
                 if (myGraphPanel == null || numPanes != myGraphPanel.numPanels())
-                    myGraphPanel = new VizGraphPanel(frame, myStates, false);
+                    myGraphPanel = new VizGraphPanel(frame, myStates, false, continuity, current);
+                myGraphPanel.setFirstState(current);
 
                 myGraphPanel.seeDot(frame, false);
                 myGraphPanel.remakeAll(frame);
@@ -1222,6 +1224,21 @@ public final class VizGUI implements ComponentListener {
         updateDisplay();
     }
 
+    /** What keeps the graphs of related instances consistent with each other. */
+    private final Continuity continuity = new Continuity();
+
+    /**
+     * Returns the arrangement of the graph on screen, under the projection it is
+     * shown with; empty if no graph is on screen.
+     */
+    private Map<AlloyProjection,LayoutTemplate> shownTemplates() {
+        Map<AlloyProjection,LayoutTemplate> ans = new HashMap<AlloyProjection,LayoutTemplate>();
+        GraphViewer shown = myGraphPanel == null ? null : myGraphPanel.alloyGetViewer();
+        if (shown != null && myGraphPanel.currentProjection() != null)
+            ans.put(myGraphPanel.currentProjection(), shown.getGraph().captureTemplate());
+        return ans;
+    }
+
     /** Load the XML instance. */
     public void loadXML(final String fileName, boolean forcefully) {
         loadXML(fileName, forcefully, current);
@@ -1238,13 +1255,20 @@ public final class VizGUI implements ComponentListener {
             try {
                 if (!f.exists())
                     throw new IOException("File " + xmlFileName + " does not exist.");
+                List<AlloyInstance> states = StaticInstanceReader.parseInstances(f);
+                // Enumerating solutions overwrites the XML file, so loading the same
+                // file again means that this is the next solution of the same command.
+                if (xmlFileName.equals(this.xmlFileName) && !myStates.isEmpty())
+                    continuity.advance(states, shownTemplates());
+                else
+                    continuity.start(states);
                 for (int i = 0; i < statepanes; i++) {
                     if (i >= myStates.size()) {
-                        AlloyInstance myInstance = StaticInstanceReader.parseInstance(f, state + i);
+                        AlloyInstance myInstance = continuity.state(state + i);
                         myStates.add(new VizState(myInstance));
                     } else {
                         VizState vstate = myStates.get(i);
-                        AlloyInstance myInstance = StaticInstanceReader.parseInstance(f, state + i);
+                        AlloyInstance myInstance = continuity.state(state + i);
                         if (vstate == null)
                             vstate = new VizState(myInstance);
                         else
@@ -1939,7 +1963,7 @@ public final class VizGUI implements ComponentListener {
         if (!myStates.isEmpty()) {
             // [electrum] apply theme to all states
             for (int i = 1; i < myStates.size(); i++) {
-                VizState old = myStates.get(1);
+                VizState old = myStates.get(i);
                 myStates.set(i, new VizState(myStates.get(0)));
                 myStates.get(i).loadInstance(old.getOriginalInstance());
             }

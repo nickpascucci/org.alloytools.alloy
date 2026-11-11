@@ -40,6 +40,7 @@ import edu.mit.csail.sdg.alloy4graph.Graph;
 import edu.mit.csail.sdg.alloy4graph.GraphEdge;
 import edu.mit.csail.sdg.alloy4graph.GraphNode;
 import edu.mit.csail.sdg.alloy4graph.GraphViewer;
+import edu.mit.csail.sdg.alloy4graph.LayoutTemplate;
 
 /**
  * This utility class generates a graph for a particular index of the
@@ -94,6 +95,24 @@ public final class StaticGraphMaker {
      * Projection
      */
     public static JPanel produceGraph(JFrame parent, AlloyInstance instance, VizState view, AlloyProjection proj) throws ErrorFatal {
+        return produceGraph(parent, instance, view, proj, null, false);
+    }
+
+    /**
+     * Produces a single Graph from the given Instance and View and choice of
+     * Projection, laid out to follow the given template (see
+     * {@link Graph#layout(LayoutTemplate, boolean)}).
+     */
+    public static JPanel produceGraph(JFrame parent, AlloyInstance instance, VizState view, AlloyProjection proj, LayoutTemplate template, boolean strict) throws ErrorFatal {
+        return new GraphViewer(parent, buildGraph(instance, view, proj), template, strict);
+    }
+
+    /**
+     * Builds the graph, not yet laid out, for the given Instance and View and
+     * choice of Projection. Each node that stands for an atom has the atom's
+     * original name as its layout key.
+     */
+    public static Graph buildGraph(AlloyInstance instance, VizState view, AlloyProjection proj) throws ErrorFatal {
         view = new VizState(view);
         if (proj == null)
             proj = new AlloyProjection();
@@ -104,7 +123,7 @@ public final class StaticGraphMaker {
             new GraphNode(graph, "", "No atoms found");
         } else if (graph.nodes.size() == 0)
             new GraphNode(graph, "", wrap("No visible atoms found, this can be caused by your theme settings.\nTheme settings might hide the following sigs that were found in the instance:\n" + distinctTypes));
-        return new GraphViewer(parent, graph);
+        return graph;
     }
 
     private static String[] wrap(String description) {
@@ -251,7 +270,7 @@ public final class StaticGraphMaker {
         DotShape shape = view.shape(atom, instance);
         String label = atomname(atom, false);
 
-        node = new GraphNode(graph, atom, label).set(shape).set(style);
+        node = new GraphNode(graph, atom, label).set(shape).set(style).setLayoutKey(atom.getOriginalName());
         if (color == DotColor.MAGIC && magicColor != null)
             node.set(magicColor);
         else

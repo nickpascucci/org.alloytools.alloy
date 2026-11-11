@@ -100,6 +100,11 @@ public final strictfp class GraphViewer extends JPanel {
      */
     public final JPopupMenu   pop              = new JPopupMenu();
 
+    /** Returns the graph being displayed. */
+    public Graph getGraph() {
+        return graph;
+    }
+
     /** Locates the node or edge at the given (X,Y) location. */
     private Object alloyFind(int mouseX, int mouseY) {
         return graph.find(scale, mouseX, mouseY);
@@ -170,11 +175,19 @@ public final strictfp class GraphViewer extends JPanel {
      * Construct a GraphViewer that displays the given graph.
      */
     public GraphViewer(JFrame parent, final Graph graph) {
+        this(parent, graph, null, false);
+    }
+
+    /**
+     * Construct a GraphViewer that displays the given graph, laid out to follow
+     * the given template (see {@link Graph#layout(LayoutTemplate, boolean)}).
+     */
+    public GraphViewer(JFrame parent, final Graph graph, LayoutTemplate template, boolean strict) {
         OurUtil.make(this, BLACK, WHITE, new EmptyBorder(0, 0, 0, 0));
         setBorder(null);
         this.scale = graph.defaultScale;
         this.graph = graph;
-        graph.layout();
+        graph.layout(template, strict);
         final JMenuItem zoomIn = new JMenuItem("Zoom In");
         final JMenuItem zoomOut = new JMenuItem("Zoom Out");
         final JMenuItem zoomToFit = new JMenuItem("Zoom to Fit");
