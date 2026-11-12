@@ -63,7 +63,7 @@ public final class TraceLayout {
      * @param earlier if not null, the arrangement leans towards this one
      */
     public static LayoutTemplate template(List<AlloyInstance> states, VizState view, AlloyProjection proj, LayoutTemplate earlier) throws ErrorFatal {
-        Graph graph = StaticGraphMaker.buildGraph(union(states), view, proj);
+        Graph graph = StaticGraphMaker.buildUnionGraph(states, view, proj);
         graph.layout(earlier, false);
         return graph.captureTemplate();
     }

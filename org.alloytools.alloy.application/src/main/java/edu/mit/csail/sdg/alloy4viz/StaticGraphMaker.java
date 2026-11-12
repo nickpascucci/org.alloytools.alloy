@@ -16,13 +16,18 @@
 package edu.mit.csail.sdg.alloy4viz;
 
 import java.awt.Color;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import javax.swing.JFrame;
@@ -31,6 +36,7 @@ import javax.swing.JPanel;
 import aQute.lib.justif.Justif;
 import edu.mit.csail.sdg.alloy4.ErrorFatal;
 import edu.mit.csail.sdg.alloy4.Util;
+import edu.mit.csail.sdg.alloy4graph.CrossEdge;
 import edu.mit.csail.sdg.alloy4graph.DiffMark;
 import edu.mit.csail.sdg.alloy4graph.DotColor;
 import edu.mit.csail.sdg.alloy4graph.DotDirection;
@@ -77,10 +83,33 @@ public final class StaticGraphMaker {
     private final Map<GraphNode,AlloyAtom>   nodes     = new LinkedHashMap<GraphNode,AlloyAtom>();
 
     /**
-     * This maps each atom to the node representing it; if an atom doesn't have a
-     * node, it won't be in the map.
+     * This maps each atom to the nodes representing it; if an atom doesn't have a
+     * node, it won't be in the map. An atom has one node, except in the graph of
+     * all states of a trace, where it has one for each place it is ever in.
      */
-    private final Map<AlloyAtom,GraphNode>   atom2node = new LinkedHashMap<AlloyAtom,GraphNode>();
+    private final Map<AlloyAtom,List<GraphNode>> atom2nodes = new LinkedHashMap<AlloyAtom,List<GraphNode>>();
+
+    /**
+     * Maps to each node its path: the original names of the atoms it is inside of,
+     * outermost first, and then its own, each preceded by a slash.
+     */
+    private final Map<String,GraphNode>          path2node  = new LinkedHashMap<String,GraphNode>();
+
+    /** The edges between nodes of different containers, and the tuple of each. */
+    private final Map<CrossEdge,AlloyTuple>      crosses    = new LinkedHashMap<CrossEdge,AlloyTuple>();
+
+    /** Which atoms of the instance are drawn inside which. */
+    private final Containment                    where;
+
+    /**
+     * If not null, the graph is that of all states of a trace: this maps the
+     * original name of each atom to the original names of all the atoms it is ever
+     * inside of, with "" for being inside none.
+     */
+    private final Map<String,Set<String>>        placements;
+
+    /** Maps the original name of each atom of the instance to the atom. */
+    private final Map<String,AlloyAtom>          name2atom  = new LinkedHashMap<String,AlloyAtom>();
 
     /**
      * This stores a set of additional labels we want to add to an existing node.
@@ -90,8 +119,6 @@ public final class StaticGraphMaker {
     /** The resulting graph. */
     private final Graph                      graph;
 
-    /** Maps the original name of each atom that has a node to that node. */
-    private final Map<String,GraphNode>      name2node = new LinkedHashMap<String,GraphNode>();
 
     /**
      * If not null, this maker adds the ghosts of a baseline instance to the graph
@@ -121,6 +148,60 @@ public final class StaticGraphMaker {
         for (Map.Entry<GraphEdge,AlloyTuple> e : edges.entrySet())
             if (e.getKey().group instanceof AlloyRelation && diff.isAdded((AlloyRelation) e.getKey().group, e.getValue()))
                 e.getKey().set(DiffMark.ADDED);
+        for (Map.Entry<CrossEdge,AlloyTuple> e : crosses.entrySet())
+            if (e.getKey().group instanceof AlloyRelation && diff.isAdded((AlloyRelation) e.getKey().group, e.getValue()))
+                e.getKey().set(DiffMark.ADDED);
+    }
+
+    /** Returns true if the theme lets the given atom of the given projected instance have a node. */
+    static boolean canShow(VizState view, AlloyInstance instance, AlloyAtom atom) {
+        final boolean hidePrivate = view.hidePrivate();
+        if ((hidePrivate && atom.getType().isPrivate) || (view.hideMeta() && atom.getType().isMeta) || !view.nodeVisible(atom, instance))
+            return false;
+        for (AlloySet set : instance.atom2sets(atom))
+            if (hidePrivate && set.isPrivate)
+                return false;
+        return true;
+    }
+
+    /** Works out which atoms of the given projected instance are drawn inside which. */
+    static Containment containment(final VizState view, final AlloyInstance instance) {
+        return new Containment(instance, view, new Predicate<AlloyAtom>() {
+
+            @Override
+            public boolean test(AlloyAtom atom) {
+                return canShow(view, instance, atom);
+            }
+        });
+    }
+
+    /**
+     * Builds the graph, not yet laid out, of everything that is in at least one of
+     * the given states of a trace. An atom that is inside different atoms in
+     * different states has a node in each of them, so that the layout of this graph
+     * has a place for every node of the graph of every state.
+     */
+    public static Graph buildUnionGraph(List<AlloyInstance> states, VizState view, AlloyProjection proj) throws ErrorFatal {
+        view = new VizState(view);
+        if (proj == null)
+            proj = new AlloyProjection();
+        final Map<String,Set<String>> placements = new LinkedHashMap<String,Set<String>>();
+        boolean any = false;
+        for (AlloyInstance state : states) {
+            AlloyInstance projected = StaticProjector.project(state, proj);
+            Containment c = containment(view, projected);
+            any |= !c.nested().isEmpty();
+            for (AlloyAtom atom : projected.getAllAtoms()) {
+                Set<String> set = placements.get(atom.getOriginalName());
+                if (set == null)
+                    placements.put(atom.getOriginalName(), set = new LinkedHashSet<String>());
+                String outer = c.parentOf(atom.getOriginalName());
+                set.add(outer == null ? "" : outer);
+            }
+        }
+        Graph graph = new Graph(view.getFontSize() / 12.0D);
+        new StaticGraphMaker(graph, TraceLayout.union(states), view, proj, null, null, any ? placements : null);
+        return graph;
     }
 
     /**
@@ -163,11 +244,11 @@ public final class StaticGraphMaker {
         if (proj == null)
             proj = new AlloyProjection();
         Graph graph = new Graph(view.getFontSize() / 12.0D);
-        StaticGraphMaker now = new StaticGraphMaker(graph, instance, view, proj, null, null);
+        StaticGraphMaker now = new StaticGraphMaker(graph, instance, view, proj, null, null, null);
         if (baseline != null) {
             InstanceDiff diff = InstanceDiff.between(StaticProjector.project(baseline, proj), now.instance);
             now.mark(diff);
-            new StaticGraphMaker(graph, baseline, view, proj, now, diff);
+            new StaticGraphMaker(graph, baseline, view, proj, now, diff, null);
         }
         Set<AlloyType> distinctTypes = findNonIntAtoms(instance);
         if (distinctTypes.isEmpty()) {
@@ -224,9 +305,10 @@ public final class StaticGraphMaker {
      * The constructor takes an Instance and a View, then insert the generate
      * graph(s) into a blank cartoon.
      */
-    private StaticGraphMaker(Graph graph, AlloyInstance originalInstance, VizState view, AlloyProjection proj, StaticGraphMaker shown, InstanceDiff diff) throws ErrorFatal {
+    private StaticGraphMaker(Graph graph, AlloyInstance originalInstance, VizState view, AlloyProjection proj, StaticGraphMaker shown, InstanceDiff diff, Map<String,Set<String>> placements) throws ErrorFatal {
         this.shown = shown;
         this.diff = diff;
+        this.placements = placements;
         final boolean hidePrivate = view.hidePrivate();
         final boolean hideMeta = view.hideMeta();
         final boolean hideSkolem = view.hideSkolem();
@@ -236,6 +318,9 @@ public final class StaticGraphMaker {
         this.view = view;
         instance = StaticProjector.project(originalInstance, proj);
         model = instance.model;
+        where = containment(view, instance);
+        for (AlloyAtom atom : instance.getAllAtoms())
+            name2atom.put(atom.getOriginalName(), atom);
         for (AlloyRelation rel : model.getRelations()) {
             rels.put(rel, null);
         }
@@ -245,6 +330,8 @@ public final class StaticGraphMaker {
             DotColor c = view.edgeColor.resolve(rel);
             Color cc = (c == DotColor.MAGIC) ? colors.get(ci) : c.getColor(view.getEdgePalette());
             int count = ((hidePrivate && rel.isPrivate) || (hideSkolem && rel.isSkolem) || !view.edgeVisible.resolve(rel)) ? 0 : edgesAsArcs(hidePrivate, hideMeta, hideSkolem, rel, colors.get(ci));
+            if (Containment.applies(view, rel))
+                count += edgesAsContainment(hidePrivate, hideMeta, hideSkolem, rel);
             rels.put(rel, count);
             magicColor.put(rel, cc);
             if (!(hidePrivate && rel.isPrivate) && !(hideSkolem && rel.isSkolem) && view.edgeVisible.resolve(rel) && model.getNonEmpty().contains(rel))
@@ -267,13 +354,13 @@ public final class StaticGraphMaker {
                 if (!(hideSkolem && s.isSkolem)) {
                     any = true;
                     if (view.nodeVisible.resolve(s) && !view.hideUnconnected.resolve(s)) {
-                        createNode(hidePrivate, hideMeta, hideSkolem, atom, magicColor.get(atom.getType()));
+                        createNodes(hidePrivate, hideMeta, hideSkolem, atom, magicColor.get(atom.getType()));
                         break;
                     }
                 }
             if (!any)
                 if (view.nodeVisible.resolve(atom.getType()) && !view.hideUnconnected.resolve(atom.getType())) {
-                    createNode(hidePrivate, hideMeta, hideSkolem, atom, magicColor.get(atom.getType()));
+                    createNodes(hidePrivate, hideMeta, hideSkolem, atom, magicColor.get(atom.getType()));
                 }
         }
         for (AlloyRelation rel : model.getRelations())
@@ -302,28 +389,108 @@ public final class StaticGraphMaker {
     }
 
     /**
-     * Return the node for a specific AlloyAtom (create it if it doesn't exist yet).
-     *
-     * @return null if the atom is explicitly marked as "Don't Show".
+     * Returns true if the given tuple is shown by putting one of its atoms inside
+     * the other.
      */
-    private GraphNode createNode(final boolean hidePrivate, final boolean hideMeta, final boolean hideSkolem, final AlloyAtom atom, Color magicColor) {
-        if (shown != null) {
-            GraphNode same = shown.name2node.get(atom.getOriginalName());
-            if (same != null)
-                return same;
+    private boolean nests(AlloyRelation rel, AlloyTuple tuple) {
+        if (placements == null)
+            return where.nests(rel, tuple);
+        if (!Containment.applies(view, rel) || tuple.getArity() != 2)
+            return false;
+        final boolean back = view.layoutBack.resolve(rel);
+        final String outer = (back ? tuple.getEnd() : tuple.getStart()).getOriginalName(), inner = (back ? tuple.getStart() : tuple.getEnd()).getOriginalName();
+        return placements.containsKey(inner) && placements.get(inner).contains(outer);
+    }
+
+    /** Makes sure that both atoms of every tuple that nests one atom in another have their nodes. */
+    private int edgesAsContainment(final boolean hidePrivate, final boolean hideMeta, final boolean hideSkolem, AlloyRelation rel) {
+        int count = 0;
+        for (AlloyTuple tuple : instance.relation2tuples(rel))
+            if (nests(rel, tuple) && !(shown != null && !diff.isRemoved(rel, tuple))) {
+                createNodes(hidePrivate, hideMeta, hideSkolem, tuple.getStart(), null);
+                createNodes(hidePrivate, hideMeta, hideSkolem, tuple.getEnd(), null);
+                count++;
+            }
+        return count;
+    }
+
+    /**
+     * Returns the paths of the nodes that the given atom is to have: one, unless
+     * this is the graph of all states of a trace.
+     *
+     * @param below the names of the atoms being placed inside this one, which
+     *            therefore cannot be around it
+     */
+    private List<String> paths(final boolean hidePrivate, final boolean hideMeta, final boolean hideSkolem, AlloyAtom atom, Set<String> below) {
+        final String name = atom.getOriginalName();
+        final List<String> ans = new ArrayList<String>();
+        final List<AlloyAtom> outers = new ArrayList<AlloyAtom>();
+        if (placements == null)
+            outers.add(where.parentOf(atom));
+        else if (placements.containsKey(name))
+            for (String outer : placements.get(name))
+                outers.add(name2atom.get(outer));
+        final Set<String> inner = new HashSet<String>(below);
+        inner.add(name);
+        for (AlloyAtom outer : outers) {
+            if (outer != null && !inner.contains(outer.getOriginalName()) && !createNodes(hidePrivate, hideMeta, hideSkolem, outer, null).isEmpty()) {
+                for (String p : paths(hidePrivate, hideMeta, hideSkolem, outer, inner))
+                    if (!ans.contains(p + "/" + name))
+                        ans.add(p + "/" + name);
+            } else if (!ans.contains("/" + name))
+                ans.add("/" + name);
         }
-        GraphNode node = atom2node.get(atom);
-        if (node != null) {
+        if (ans.isEmpty())
+            ans.add("/" + name);
+        return ans;
+    }
+
+    /** Returns the node at the given path in the graph, whichever maker made it; null if none. */
+    private GraphNode at(String path) {
+        GraphNode ans = path2node.get(path);
+        return (ans == null && shown != null) ? shown.path2node.get(path) : ans;
+    }
+
+    /**
+     * Returns the nodes for a specific AlloyAtom (creating them if they don't exist
+     * yet).
+     *
+     * @return an empty list if the atom is explicitly marked as "Don't Show".
+     */
+    private List<GraphNode> createNodes(final boolean hidePrivate, final boolean hideMeta, final boolean hideSkolem, final AlloyAtom atom, Color magicColor) {
+        List<GraphNode> made = atom2nodes.get(atom);
+        if (made != null) {
             DotColor color = view.nodeColor(atom, instance);
-            if (color == DotColor.MAGIC && magicColor != null)
-                node.set(magicColor);
-            return node;
+            if (color == DotColor.MAGIC && magicColor != null && shown == null)
+                for (GraphNode node : made)
+                    node.set(magicColor);
+            return made;
         }
-        if ((hidePrivate && atom.getType().isPrivate) || (hideMeta && atom.getType().isMeta) || !view.nodeVisible(atom, instance))
-            return null;
-        for (AlloySet set : instance.atom2sets(atom))
-            if (hidePrivate && set.isPrivate)
-                return null;
+        if (!canShow(view, instance, atom))
+            return Collections.emptyList();
+        made = new ArrayList<GraphNode>();
+        atom2nodes.put(atom, made);
+        for (String path : paths(hidePrivate, hideMeta, hideSkolem, atom, Collections.<String> emptySet())) {
+            GraphNode node = at(path);
+            if (node == null) {
+                GraphNode outer = at(path.substring(0, path.lastIndexOf('/')));
+                node = createNode(hidePrivate, hideMeta, hideSkolem, atom, magicColor, outer == null ? graph : outer.inside());
+                path2node.put(path, node);
+                // An atom that is still shown, but inside another atom, has moved there.
+                final String name = atom.getOriginalName();
+                final List<GraphNode> now = shown == null ? null : shown.atom2nodes.get(shown.name2atom.get(name));
+                if (now != null && !Objects.equals(where.parentOf(name), shown.where.parentOf(name)))
+                    for (GraphNode there : now)
+                        there.set(DiffMark.ADDED);
+            }
+            made.add(node);
+        }
+        return made;
+    }
+
+    /** Makes a node for the given atom in the given graph. */
+    private GraphNode createNode(final boolean hidePrivate, final boolean hideMeta, final boolean hideSkolem, final AlloyAtom atom, Color magicColor, Graph graph) {
+        GraphNode node;
         // Make the node
         DotColor color = view.nodeColor(atom, instance);
         DotStyle style = view.nodeStyle(atom, instance);
@@ -356,8 +523,6 @@ public final class StaticGraphMaker {
         if (shown != null)
             node.set(DiffMark.REMOVED);
         nodes.put(node, atom);
-        atom2node.put(atom, node);
-        name2node.put(atom.getOriginalName(), node);
         return node;
     }
 
@@ -381,9 +546,11 @@ public final class StaticGraphMaker {
             return false;
         if ((hidePrivate && tuple.getEnd().getType().isPrivate) || (hideMeta && tuple.getEnd().getType().isMeta) || !view.nodeVisible(tuple.getEnd(), instance))
             return false;
-        GraphNode start = createNode(hidePrivate, hideMeta, hideSkolem, tuple.getStart(), null);
-        GraphNode end = createNode(hidePrivate, hideMeta, hideSkolem, tuple.getEnd(), null);
-        if (start == null || end == null)
+        if (nests(rel, tuple))
+            return false;
+        List<GraphNode> starts = createNodes(hidePrivate, hideMeta, hideSkolem, tuple.getStart(), null);
+        List<GraphNode> ends = createNodes(hidePrivate, hideMeta, hideSkolem, tuple.getEnd(), null);
+        if (starts.isEmpty() || ends.isEmpty())
             return false;
         boolean layoutBack = view.layoutBack.resolve(rel);
         String label = view.label.get(rel);
@@ -404,17 +571,25 @@ public final class StaticGraphMaker {
         DotStyle style = view.edgeStyle.resolve(rel);
         DotColor color = view.edgeColor.resolve(rel);
         int weight = view.weight.get(rel);
-        GraphEdge e = new GraphEdge((layoutBack ? end : start), (layoutBack ? start : end), tuple, label, rel);
-        if (color == DotColor.MAGIC && magicColor != null)
-            e.set(magicColor);
-        else
-            e.set(color.getColor(view.getEdgePalette()));
-        e.set(style);
-        e.set(dir != DotDirection.FORWARD, dir != DotDirection.BACK);
-        e.set(weight < 1 ? 1 : (weight > 100 ? 10000 : 100 * weight));
-        if (shown != null)
-            e.set(DiffMark.REMOVED).set(1); // a ghost gives way to the edges that are there
-        edges.put(e, tuple);
+        final Color paint = (color == DotColor.MAGIC && magicColor != null) ? magicColor : color.getColor(view.getEdgePalette());
+        final int pull = weight < 1 ? 1 : (weight > 100 ? 10000 : 100 * weight);
+        for (GraphNode start : starts)
+            for (GraphNode end : ends) {
+                final GraphNode from = layoutBack ? end : start, to = layoutBack ? start : end;
+                if (from.container() == to.container()) {
+                    GraphEdge e = new GraphEdge(from, to, tuple, label, rel);
+                    e.set(paint).set(style).set(dir != DotDirection.FORWARD, dir != DotDirection.BACK).set(pull);
+                    if (shown != null)
+                        e.set(DiffMark.REMOVED).set(1); // a ghost gives way to the edges that are there
+                    edges.put(e, tuple);
+                } else {
+                    CrossEdge e = graph.connect(from, to, tuple, label, rel);
+                    e.set(paint).set(style).set(dir != DotDirection.FORWARD, dir != DotDirection.BACK).set(pull);
+                    if (shown != null)
+                        e.set(DiffMark.REMOVED).set(1);
+                    crosses.put(e, tuple);
+                }
+            }
         return true;
     }
 
@@ -474,9 +649,9 @@ public final class StaticGraphMaker {
         //
         Map<GraphNode,String> map = new LinkedHashMap<GraphNode,String>();
         for (AlloyTuple tuple : instance.relation2tuples(rel)) {
-            GraphNode start = atom2node.get(tuple.getStart());
-            if (start == null)
-                continue; // null means the node won't be shown, so we can't
+            List<GraphNode> starts = atom2nodes.get(tuple.getStart());
+            if (starts == null || starts.isEmpty())
+                continue; // this means the node won't be shown, so we can't
                          // show any attributes
             String attr = "";
             List<AlloyAtom> atoms = tuple.getAtoms();
@@ -487,11 +662,13 @@ public final class StaticGraphMaker {
             }
             if (attr.length() == 0)
                 continue;
-            String oldattr = map.get(start);
-            if (oldattr != null && oldattr.length() > 0)
-                attr = oldattr + ", " + attr;
-            if (attr.length() > 0)
-                map.put(start, attr);
+            for (GraphNode start : starts) {
+                String oldattr = map.get(start), all = attr;
+                if (oldattr != null && oldattr.length() > 0)
+                    all = oldattr + ", " + all;
+                if (all.length() > 0)
+                    map.put(start, all);
+            }
         }
         for (Map.Entry<GraphNode,String> e : map.entrySet()) {
             GraphNode node = e.getKey();

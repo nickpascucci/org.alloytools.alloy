@@ -481,10 +481,162 @@ public final strictfp class GraphNode {
         return new Rectangle2D.Double(x() - side - xfluff, y() - updown - yfluff, side + side + xfluff + xfluff, updown + updown + yfluff + yfluff);
     }
 
-    /** Returns the rectangle that the text labels are centered in. */
+    /**
+     * Returns the graph of the nodes inside this node. A node with a non-empty
+     * graph inside it is a container: it is drawn as a box around that graph, with
+     * its own labels on top.
+     */
+    public Graph inside() {
+        if (inner == null) {
+            inner = new Graph(graph.defaultScale, this);
+            updown = (-1);
+        }
+        return inner;
+    }
+
+    /** The graph of the nodes inside this node (null if there has never been one). */
+    private Graph inner    = null;
+
+    /**
+     * If this node is a container and (updown>=0), the place of the top left corner
+     * of the graph inside it, relative to the center of this node.
+     */
+    private int   innerDX  = 0, innerDY = 0;
+
+    /**
+     * If this node is a container and (updown>=0), the room its labels take above
+     * the graph inside it.
+     */
+    private int   headW    = 0, headH = 0;
+
+    /** The least room to leave for the labels of a container. */
+    private int   minHeadW = 0, minHeadH = 0;
+
+    /** Returns the node that this node is inside of, or null if there is none. */
+    public GraphNode container() {
+        return graph.owner;
+    }
+
+    /** Returns true if there are nodes inside this node. */
+    public boolean isContainer() {
+        return inner != null && shape != null && !inner.nodes.isEmpty();
+    }
+
+    /** Forgets the computed bounds, which the next use will compute again. */
+    void invalidate() {
+        updown = (-1);
+    }
+
+    /**
+     * Makes this node, when it is a container, leave at least the given room for
+     * its labels, so that it can match the size it has in another graph.
+     */
+    void reserveHead(int width, int height) {
+        minHeadW = width;
+        minHeadH = height;
+        updown = (-1);
+    }
+
+    /** Returns the width of the room for the labels of a container (0 if this is none). */
+    int headWidth() {
+        if (updown < 0)
+            calcBounds();
+        return headW;
+    }
+
+    /** Returns the height of the room for the labels of a container (0 if this is none). */
+    int headHeight() {
+        if (updown < 0)
+            calcBounds();
+        return headH;
+    }
+
+    /**
+     * Returns the shape this node is drawn in. A container keeps its shape if that
+     * is one of the box-like ones, which have room for content; otherwise it is a
+     * box.
+     */
+    private DotShape drawnShape() {
+        if (!isContainer() || shape == DotShape.FOLDER || shape == DotShape.DOCUMENT || shape == DotShape.DATABASE || shape == DotShape.MAILBOX)
+            return shape;
+        return DotShape.BOX;
+    }
+
+    /** Returns the outermost node that this node is inside of, or this node itself. */
+    GraphNode outermost() {
+        GraphNode n = this;
+        while (n.graph.owner != null)
+            n = n.graph.owner;
+        return n;
+    }
+
+    /** Returns true if this node is inside the given node, at any depth. */
+    boolean isInside(GraphNode other) {
+        for (GraphNode n = graph.owner; n != null; n = n.graph.owner)
+            if (n == other)
+                return true;
+        return false;
+    }
+
+    /**
+     * Assuming the outermost graph is laid out, returns the X coordinate of the
+     * center of this node in the coordinates of the outermost graph.
+     */
+    int absX() {
+        final GraphNode up = graph.owner;
+        if (up == null)
+            return centerX;
+        if (up.updown < 0)
+            up.calcBounds();
+        return up.absX() + up.innerDX + (centerX - graph.getLeft());
+    }
+
+    /** The same as absX(), for the Y coordinate. */
+    int absY() {
+        final GraphNode up = graph.owner;
+        if (up == null)
+            return centerY;
+        if (up.updown < 0)
+            up.calcBounds();
+        return up.absY() + up.innerDY + (centerY - graph.getTop());
+    }
+
+    /**
+     * Given a point in the coordinates of this node's graph that this container
+     * covers, returns what is there in the graph inside it (null if nothing is).
+     */
+    Object findInside(double scale, double x, double y) {
+        if (!isContainer())
+            return null;
+        if (updown < 0)
+            calcBounds();
+        return inner.findAt(scale, x - centerX - innerDX + inner.getLeft(), y - centerY - innerDY + inner.getTop());
+    }
+
+    /** Returns the name of this node in DOT output. */
+    String dotName() {
+        return graph.owner == null ? ("N" + pos) : (graph.owner.dotName() + "_" + pos);
+    }
+
+    /**
+     * Assuming the outermost graph is laid out, returns the bounding rectangle of
+     * this node in the coordinates of the outermost graph.
+     */
+    public Rectangle2D absoluteBox() {
+        if (updown < 0)
+            calcBounds();
+        return new Rectangle2D.Double(absX() - side, absY() - updown, side + side, updown + updown);
+    }
+
+    /**
+     * Returns the rectangle that the text labels are centered in; for a container,
+     * that is the strip above the graph inside it.
+     */
     Rectangle2D labelBox() {
         if (updown < 0)
             calcBounds();
+        if (isContainer())
+            return new Rectangle2D.Double(x() - width / 2, y() + yShift - height / 2, width, innerDY - (yShift - height / 2));
         return new Rectangle2D.Double(x() - width / 2, y() + yShift - height / 2, width, height);
     }
 
@@ -524,11 +676,15 @@ public final strictfp class GraphNode {
      * Draws this node at its current (x, y) location; this method will call
      * calcBounds() if necessary.
      */
-    void draw(Artist gr, double scale, boolean highlight) {
-        if (shape == null)
+    void draw(Artist gr, double scale, boolean highlight, Object allHighlight) {
+        if (this.shape == null)
             return;
         else if (updown < 0)
             calcBounds();
+        final DotShape shape = drawnShape();
+        final boolean container = isContainer();
+        // A container is paler than its color, so that what is inside it stands out.
+        final Color color = container ? DiffMark.tint(this.color) : this.color;
         final int top = graph.getTop(), left = graph.getLeft();
         final boolean round = shape == DotShape.CIRCLE || shape == DotShape.M_CIRCLE || shape == DotShape.DOUBLE_CIRCLE;
         final boolean ghost = diffMark == DiffMark.REMOVED;
@@ -595,7 +751,7 @@ public final strictfp class GraphNode {
         else
             gr.setColor((clr == 0x000000 || clr == 0xff0000 || clr == 0x0000ff) ? Color.WHITE : Color.BLACK);
         if (labels != null && labels.size() > 0) {
-            int x = (-width / 2), y = yShift + (-labels.size() * ad / 2);
+            int x = (-width / 2), y = container ? (yShift - height / 2 + labelPadding) : (yShift + (-labels.size() * ad / 2));
             for (int i = 0; i < labels.size(); i++) {
                 String t = labels.get(i);
                 int w = ((int) (getBounds(fontBold, t).getWidth())) + 1; // Round
@@ -608,6 +764,11 @@ public final strictfp class GraphNode {
                 gr.drawString(t, x + w, y + Artist.getMaxAscent());
                 y = y + ad;
             }
+        }
+        if (container) {
+            gr.translate(innerDX, innerDY);
+            inner.draw(gr, scale, allHighlight, false);
+            gr.translate(-innerDX, -innerDY);
         }
         if (diffMark != DiffMark.NONE) {
             // The badge sits on the top right corner; on a circle, where the corner would be.
@@ -625,10 +786,11 @@ public final strictfp class GraphNode {
      * the edges, so that it does not hide where they meet the node.
      */
     void drawHalo(Artist gr, double scale) {
-        if (shape == null || (diffMark != DiffMark.ADDED && diffMark != DiffMark.CHANGED))
+        if (this.shape == null || (diffMark != DiffMark.ADDED && diffMark != DiffMark.CHANGED))
             return;
         else if (updown < 0)
             calcBounds();
+        final DotShape shape = drawnShape();
         final int top = graph.getTop(), left = graph.getLeft();
         gr.translate(centerX - left, centerY - top);
         gr.setStroke(haloWidth, null, scale);
@@ -836,8 +998,10 @@ public final strictfp class GraphNode {
         if (height < dummyHeight)
             updown = dummyHeight / 2;
         poly = (poly2 = (poly3 = null));
-        if (shape == null)
+        headW = (headH = 0);
+        if (this.shape == null)
             return;
+        final DotShape shape = drawnShape();
         Polygon poly = new Polygon();
         if (labels != null)
             for (int i = 0; i < labels.size(); i++) {
@@ -848,6 +1012,12 @@ public final strictfp class GraphNode {
                     width = ww;
                 height = height + ad;
             }
+        if (isContainer()) {
+            headW = Math.max(width, minHeadW);
+            headH = Math.max((labels == null || labels.isEmpty()) ? 0 : (labels.size() * ad + labelPadding), minHeadH);
+            width = Math.max(headW, inner.getTotalWidth());
+            height = headH + inner.getTotalHeight();
+        }
         int hw = ((width + 1) / 2) + labelPadding;
         if (hw < ad / 2)
             hw = ad / 2;
@@ -1223,6 +1393,10 @@ public final strictfp class GraphNode {
                 poly.addPoint(-hw, hh);
             }
         }
+        if (isContainer()) {
+            innerDX = -inner.getTotalWidth() / 2;
+            innerDY = yShift - height / 2 + labelPadding + headH;
+        }
         if (custom != null)
             this.poly = custom;
         else if (shape != DotShape.EGG && shape != DotShape.ELLIPSE)
@@ -1257,7 +1431,7 @@ public final strictfp class GraphNode {
             main = "0" + main;
         }
         StringBuilder out = new StringBuilder();
-        out.append("\"N" + pos + "\"");
+        out.append("\"" + dotName() + "\"");
         out.append(" [");
         out.append("uuid=\"");
         if (uuid != null)

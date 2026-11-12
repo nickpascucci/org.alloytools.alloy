@@ -86,6 +86,7 @@ public final class VizState {
         mergeArrows.putAll(old.mergeArrows);
         constraint.putAll(old.constraint);
         layoutBack.putAll(old.layoutBack);
+        container.putAll(old.container);
         edgeColor.putAll(old.edgeColor);
         edgeStyle.putAll(old.edgeStyle);
         edgeVisible.putAll(old.edgeVisible);
@@ -131,6 +132,8 @@ public final class VizState {
         constraint.put(null, true);
         layoutBack.clear();
         layoutBack.put(null, false);
+        container.clear();
+        container.put(null, false);
         edgeColor.clear();
         edgeColor.put(null, DotColor.MAGIC);
         edgeStyle.clear();
@@ -592,6 +595,11 @@ public final class VizState {
     public final MMap<Boolean>  mergeArrows     = new MMap<Boolean>(true, false);
     public final MMap<Boolean>  constraint      = new MMap<Boolean>(true, false);
     public final MMap<Boolean>  layoutBack      = new MMap<Boolean>(true, false);
+    /**
+     * Whether a binary relation is drawn by putting the atoms it relates to inside
+     * the atom it relates them from (the other way around with layoutBack).
+     */
+    public final MMap<Boolean>  container       = new MMap<Boolean>(true, false);
     public final MMap<Boolean>  edgeVisible     = new MMap<Boolean>(true, false);
     public final MMap<Boolean>  nodeVisible     = new MMap<Boolean>(true, false);
     public final MMap<Boolean>  number          = new MMap<Boolean>(true, false);

@@ -55,6 +55,7 @@ final class MagicLayout {
         st.projection();
         st.nodeVisibility();
         st.spine();
+        st.containers();
         st.attributes();
         st.edgeLabels();
     }
@@ -232,6 +233,43 @@ final class MagicLayout {
             vizState.edgeColor.put(s, null);
         }
 
+    }
+
+    /** Names of relations that relate a container to what it contains. */
+    private final static ConstList<String> CONTAINS_NAMES     = Util.asList("contains", "contents", "content", "children", "entries", "members", "elements", "items", "holds");
+
+    /** Names of relations that relate a thing to what contains it. */
+    private final static ConstList<String> CONTAINED_IN_NAMES = Util.asList("parent", "container", "inside", "within", "partof", "memberof", "locatedin");
+
+    /**
+     * SEMANTIC/LAYOUT: Determine which relations to show by nesting atoms inside
+     * one another.
+     * <ul>
+     * <li>the name must say containment, in either direction (contents, parent...)
+     * <li>the instance must agree: every atom is inside at most one other, and
+     * none is inside itself
+     * </ul>
+     */
+    private void containers() {
+        final AlloyInstance instance = vizState.getOriginalInstance();
+        for (AlloyRelation r : vizState.getCurrentModel().getRelations()) {
+            if (r.getArity() != 2 || r.getTypes().contains(projectionType))
+                continue;
+            String name = r.getName().substring(r.getName().lastIndexOf('/') + 1).toLowerCase().replace("_", "");
+            final boolean back = CONTAINED_IN_NAMES.contains(name);
+            if (!back && !CONTAINS_NAMES.contains(name))
+                continue;
+            AlloyRelation same = instance.model.hasRelation(r.getName(), r.getTypes());
+            if (same == null || instance.relation2tuples(same).isEmpty())
+                continue;
+            final VizState trial = new VizState(vizState);
+            trial.container.put(same, true);
+            trial.layoutBack.put(same, back);
+            if (StaticGraphMaker.containment(trial, instance).nested().size() == instance.relation2tuples(same).size()) {
+                vizState.container.put(r, true);
+                vizState.layoutBack.put(r, back);
+            }
+        }
     }
 
     /**

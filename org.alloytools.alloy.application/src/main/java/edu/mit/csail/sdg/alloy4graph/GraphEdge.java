@@ -178,6 +178,18 @@ public final strictfp class GraphEdge {
         this(from, to, uuid, label, false, true, null, null, group);
     }
 
+    /**
+     * True if this edge only takes part in the layout and is never drawn nor found;
+     * it stands in for an edge between nodes of different graphs.
+     */
+    boolean hidden = false;
+
+    /** Sets whether this edge only takes part in the layout. */
+    GraphEdge hide(boolean hidden) {
+        this.hidden = hidden;
+        return this;
+    }
+
     /** Returns the "from" node. */
     public GraphNode a() {
         return a;
@@ -471,6 +483,8 @@ public final strictfp class GraphEdge {
      * current zoom scale, draw the edge.
      */
     void draw(Artist gr, double scale, GraphEdge highEdge, Object highGroup) {
+        if (hidden)
+            return;
         final int top = a.graph.getTop(), left = a.graph.getLeft();
         gr.translate(-left, -top);
         // Concatenate this path and its connected segments into a single
@@ -606,7 +620,7 @@ public final strictfp class GraphEdge {
     @Override
     public String toString() {
         GraphNode a = this.a, b = this.b;
-        if (a.shape() == null)
+        if (a.shape() == null || hidden)
             return ""; // This means this edge is virtual
         while (b.shape() == null) {
             b = b.outs.get(0).b;
@@ -616,9 +630,9 @@ public final strictfp class GraphEdge {
             color = "0" + color;
         }
         StringBuilder out = new StringBuilder();
-        out.append("\"N" + a.pos() + "\"");
+        out.append("\"" + a.dotName() + "\"");
         out.append(" -> ");
-        out.append("\"N" + b.pos() + "\"");
+        out.append("\"" + b.dotName() + "\"");
         out.append(" [");
         out.append("uuid = \"" + (uuid == null ? "" : esc(uuid.toString())) + "\"");
         out.append(", color = \"#" + color + "\"");

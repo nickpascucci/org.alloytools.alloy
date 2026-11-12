@@ -127,11 +127,7 @@ public final strictfp class GraphViewer extends JPanel {
      * it; null, or a key that no node has, removes the highlight.
      */
     public void highlightKey(String key) {
-        Object found = null;
-        if (key != null)
-            for (GraphNode n : graph.nodes)
-                if (key.equals(n.layoutKey()))
-                    found = n;
+        Object found = graph.nodeWithKey(key);
         if (highlight != found) {
             highlight = found;
             repaint();
@@ -177,6 +173,8 @@ public final strictfp class GraphViewer extends JPanel {
             return ((GraphNode) selected).uuid;
         if (selected instanceof GraphEdge)
             return ((GraphEdge) selected).uuid;
+        if (selected instanceof CrossEdge)
+            return ((CrossEdge) selected).uuid;
         return null;
     }
 
@@ -189,6 +187,8 @@ public final strictfp class GraphViewer extends JPanel {
             return ((GraphNode) highlight).uuid;
         if (highlight instanceof GraphEdge)
             return ((GraphEdge) highlight).uuid;
+        if (highlight instanceof CrossEdge)
+            return ((CrossEdge) highlight).uuid;
         return null;
     }
 
@@ -310,7 +310,8 @@ public final strictfp class GraphViewer extends JPanel {
                 if (selected instanceof GraphNode && dragButton == 1) {
                     int newX = (int) (oldX + (ev.getX() - oldMouseX) / scale);
                     int newY = (int) (oldY + (ev.getY() - oldMouseY) / scale);
-                    GraphNode n = (GraphNode) selected;
+                    // A node inside a container moves along with the outermost container.
+                    GraphNode n = ((GraphNode) selected).outermost();
                     if (n.x() != newX || n.y() != newY) {
                         n.tweak(newX, newY);
                         alloyRepaint();
@@ -353,8 +354,8 @@ public final strictfp class GraphViewer extends JPanel {
                     highlight = null;
                     alloyRepaint();
                     if (selected instanceof GraphNode) {
-                        oldX = ((GraphNode) selected).x();
-                        oldY = ((GraphNode) selected).y();
+                        oldX = ((GraphNode) selected).outermost().x();
+                        oldY = ((GraphNode) selected).outermost().y();
                     }
                 }
             }

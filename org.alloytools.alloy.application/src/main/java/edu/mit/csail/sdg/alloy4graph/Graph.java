@@ -19,6 +19,7 @@ import static edu.mit.csail.sdg.alloy4graph.Artist.getBounds;
 
 import java.awt.Color;
 import java.awt.geom.Line2D;
+import java.awt.geom.Rectangle2D;
 import java.awt.geom.RoundRectangle2D;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -142,9 +143,57 @@ public final strictfp class Graph {
 
     // ============================================================================================================================//
 
+    /**
+     * The container node that this graph is inside of; null if this is an outermost
+     * graph.
+     */
+    final GraphNode               owner;
+
+    /**
+     * The edges between nodes of different graphs; only an outermost graph has
+     * any, and both ends of each are in it or nested in it.
+     */
+    private final List<CrossEdge> crosslist        = new ArrayList<CrossEdge>();
+
+    /** An unmodifiable view of the edges between nodes of different graphs. */
+    public final List<CrossEdge>  crossEdges       = Collections.unmodifiableList(crosslist);
+
     /** Constructs an empty Graph object. */
     public Graph(double defaultScale) {
+        this(defaultScale, null);
+    }
+
+    /** Constructs an empty graph inside the given container node (null if none). */
+    Graph(double defaultScale, GraphNode owner) {
         this.defaultScale = defaultScale;
+        this.owner = owner;
+    }
+
+    /** Returns the outermost graph that this graph is nested in, or this graph itself. */
+    Graph outermost() {
+        Graph g = this;
+        while (g.owner != null)
+            g = g.owner.graph;
+        return g;
+    }
+
+    /**
+     * Returns the first node with the given layout key in this graph or, failing
+     * that, in the graphs nested in it; null if there is none.
+     */
+    public GraphNode nodeWithKey(String key) {
+        if (key == null)
+            return null;
+        for (GraphNode n : nodes)
+            if (key.equals(n.layoutKey()))
+                return n;
+        for (GraphNode n : nodes)
+            if (n.isContainer()) {
+                GraphNode ans = n.inside().nodeWithKey(key);
+                if (ans != null)
+                    return ans;
+            }
+        return null;
     }
 
     /**
@@ -427,7 +476,7 @@ public final strictfp class Graph {
                 // now we have three nodes in the vertical order of "tmp", "a",
                 // then "b"
                 e.change(a); // let old edge go from "tmp" to "a"
-                e = new GraphEdge(a, b, e.uuid, "", e.ahead(), e.bhead(), e.style(), e.color(), e.group); // let
+                e = new GraphEdge(a, b, e.uuid, "", e.ahead(), e.bhead(), e.style(), e.color(), e.group).hide(edge.hidden); // let
                                                                                                          // new
                                                                                                          // edge
                                                                                                          // go
@@ -745,8 +794,17 @@ public final strictfp class Graph {
      * @param template the earlier layout to follow (null means a fresh layout)
      */
     public void layout(LayoutTemplate template, boolean strict) {
+        // What is inside a container is laid out first, since that decides its size.
+        for (GraphNode n : nodes)
+            if (n.isContainer()) {
+                LayoutTemplate.Slot slot = template == null ? null : template.slot(n.layoutKey());
+                n.inside().layout(template == null ? null : template.inner(n.layoutKey()), strict);
+                n.reserveHead(slot == null ? 0 : slot.headW, slot == null ? 0 : slot.headH);
+            }
         if (template == null || nodes.size() == 0) {
-            layout();
+            for (GraphNode n : nodes)
+                n.preferredX = null;
+            layoutAfresh();
             return;
         }
         if (strict && fits(template)) {
@@ -882,17 +940,43 @@ public final strictfp class Graph {
      */
     public LayoutTemplate captureTemplate() {
         final Map<String,LayoutTemplate.Slot> slots = new LinkedHashMap<String,LayoutTemplate.Slot>();
+        final Map<String,LayoutTemplate> inners = new LinkedHashMap<String,LayoutTemplate>();
         for (GraphNode n : nodes)
-            if (n.shape() != null && n.layoutKey() != null)
-                slots.put(n.layoutKey(), new LayoutTemplate.Slot(n.layer(), n.x(), n.y()));
-        return new LayoutTemplate(slots, layerPH == null ? new int[0] : layerPH, left, top, totalWidth, totalHeight);
+            if (n.shape() != null && n.layoutKey() != null) {
+                slots.put(n.layoutKey(), new LayoutTemplate.Slot(n.layer(), n.x(), n.y(), n.headWidth(), n.headHeight()));
+                if (n.isContainer())
+                    inners.put(n.layoutKey(), n.inside().captureTemplate());
+            }
+        return new LayoutTemplate(slots, inners, layerPH == null ? new int[0] : layerPH, left, top, totalWidth, totalHeight);
+    }
+
+    /**
+     * Adds an edge between two nodes of this graph or of the graphs nested in it,
+     * which need not be in the same graph.
+     */
+    public CrossEdge connect(GraphNode from, GraphNode to, Object uuid, String label, Object group) {
+        if (owner != null)
+            return outermost().connect(from, to, uuid, label, group);
+        if (from.graph.outermost() != this || to.graph.outermost() != this)
+            throw new IllegalArgumentException("You cannot draw an edge between two different graphs.");
+        // In the innermost graph that has both ends in it or nested in it, a hidden
+        // edge between the two nodes that hold the ends lets the layout take this
+        // edge into account.
+        final Map<Graph,GraphNode> chain = new LinkedHashMap<Graph,GraphNode>();
+        for (GraphNode n = from; n != null; n = n.graph.owner)
+            chain.put(n.graph, n);
+        GraphNode a = null, b = to;
+        while ((a = chain.get(b.graph)) == null)
+            b = b.graph.owner;
+        GraphEdge proxy = (a == b) ? null : new GraphEdge(a, b, uuid, "", null).hide(true);
+        CrossEdge ans = new CrossEdge(from, to, uuid, label, group, proxy);
+        crosslist.add(ans);
+        return ans;
     }
 
     /** (Re-)perform the layout, with no regard to any earlier layout. */
     public void layout() {
-        for (GraphNode n : nodes)
-            n.preferredX = null;
-        layoutAfresh();
+        layout(null, false);
     }
 
     /**
@@ -1000,8 +1084,14 @@ public final strictfp class Graph {
                 if (maxX < x2)
                     maxX = x2;
             }
-        left = minX - 20;
-        totalWidth = maxX - minX + 20;
+        if (owner != null) {
+            // A graph inside a container has the same margin all around.
+            left = minX;
+            totalWidth = maxX - minX;
+        } else {
+            left = minX - 20;
+            totalWidth = maxX - minX + 20;
+        }
         // Find the topmost and bottommost pixel
         for (int layer = layers() - 1; layer >= 0; layer--) {
             for (GraphNode n : layer(layer)) {
@@ -1196,13 +1286,31 @@ public final strictfp class Graph {
             if (x >= getLeft() + 10 && x <= getLeft() + 10 + w)
                 return e.getKey();
         }
+        final Object hit = findAt(scale, x, y);
+        // An edge between containers runs on top of them, but under no other node.
+        if (hit == null || (hit instanceof GraphNode && ((GraphNode) hit).isContainer()))
+            for (CrossEdge e : crosslist)
+                if (e.isNear(x, y, 6 / scale))
+                    return e;
+        return hit;
+    }
+
+    /**
+     * Locates the node or edge at the given point, which is in the coordinates of
+     * this graph; a node inside a container is preferred to the container.
+     */
+    Object findAt(double scale, double x, double y) {
         for (GraphNode n : nodes) {
-            if (n.shape() == null && Math.abs(n.x() - x) < 10 && Math.abs(n.y() - y) < 10)
+            if (n.shape() == null && owner == null && Math.abs(n.x() - x) < 10 && Math.abs(n.y() - y) < 10)
                 return n;
-            if (n.contains(x, y))
-                return n;
+            if (n.contains(x, y)) {
+                Object deeper = n.findInside(scale, x, y);
+                return deeper != null ? deeper : n;
+            }
         }
         for (GraphEdge e : edges) {
+            if (e.hidden)
+                continue;
             if (e.a() != e.b()) {
                 double dx;
                 dx = e.path().getXatY(y, 0, 1, Double.NaN);
@@ -1234,6 +1342,14 @@ public final strictfp class Graph {
         if (nodes.size() == 0)
             return; // The rest of this procedure assumes there is at least one
                    // node
+        final Object allHighlight = highlight;
+        CrossEdge highCross = null;
+        // An edge that is not in this graph highlights its whole group here.
+        if (highlight instanceof CrossEdge) {
+            highCross = (CrossEdge) highlight;
+            highlight = highCross.group;
+        } else if (highlight instanceof GraphEdge && ((GraphEdge) highlight).a().graph != this)
+            highlight = ((GraphEdge) highlight).group;
         Object group = null;
         GraphNode highFirstNode = null, highLastNode = null;
         GraphEdge highFirstEdge = null, highLastEdge = null;
@@ -1280,11 +1396,17 @@ public final strictfp class Graph {
         }
         for (GraphNode n : nodes)
             if (highFirstNode != n && highLastNode != n)
-                n.draw(gr, scale, n == highlight);
+                n.draw(gr, scale, n == highlight, allHighlight);
         if (highFirstNode != null)
-            highFirstNode.draw(gr, scale, true);
+            highFirstNode.draw(gr, scale, true, allHighlight);
         if (highLastNode != null && highLastNode != highFirstNode)
-            highLastNode.draw(gr, scale, true);
+            highLastNode.draw(gr, scale, true, allHighlight);
+        final List<Rectangle2D> labels = new ArrayList<Rectangle2D>();
+        for (CrossEdge e : crosslist)
+            if (e != highCross)
+                e.draw(gr, scale, false, group != null && e.group != group, labels);
+        if (highCross != null)
+            highCross.draw(gr, scale, true, false, labels);
         if (highFirstEdge != null)
             highFirstEdge.drawLabel(gr, highFirstEdge.color(), new Color(255, 255, 255, 160));
         // show legends?
@@ -1343,11 +1465,24 @@ public final strictfp class Graph {
     public String toString() {
         StringBuilder sb = new StringBuilder();
         sb.append("digraph \"graph\" {\n" + "graph [fontsize=12]\n" + "node [fontsize=12]\n" + "edge [fontsize=12]\n" + "rankdir=TB;\n");
+        appendDot(sb);
+        for (CrossEdge e : crosslist)
+            sb.append(e);
+        sb.append("}\n");
+        return sb.toString();
+    }
+
+    /** Appends the DOT representation of the edges and nodes; each container becomes a cluster. */
+    private void appendDot(StringBuilder sb) {
         for (GraphEdge e : edges)
             sb.append(e);
         for (GraphNode n : nodes)
-            sb.append(n);
-        sb.append("}\n");
-        return sb.toString();
+            if (n.isContainer()) {
+                sb.append("subgraph \"cluster_" + n.dotName() + "\" {\n");
+                sb.append(n);
+                n.inside().appendDot(sb);
+                sb.append("}\n");
+            } else
+                sb.append(n);
     }
 }
