@@ -26,6 +26,9 @@ import static java.lang.StrictMath.sqrt;
 import java.awt.Color;
 import java.awt.Polygon;
 import java.awt.Shape;
+import java.awt.Rectangle;
+import java.awt.geom.Area;
+import java.awt.geom.Ellipse2D;
 import java.awt.geom.GeneralPath;
 import java.awt.geom.Rectangle2D;
 import java.util.ArrayList;
@@ -478,6 +481,22 @@ public final strictfp class GraphNode {
         return new Rectangle2D.Double(x() - side - xfluff, y() - updown - yfluff, side + side + xfluff + xfluff, updown + updown + yfluff + yfluff);
     }
 
+    /** Returns the rectangle that the text labels are centered in. */
+    Rectangle2D labelBox() {
+        if (updown < 0)
+            calcBounds();
+        return new Rectangle2D.Double(x() - width / 2, y() + yShift - height / 2, width, height);
+    }
+
+    /**
+     * Returns the lines drawn on top of the outline (null if the shape has none).
+     */
+    Shape decoration() {
+        if (updown < 0)
+            calcBounds();
+        return poly2;
+    }
+
     /**
      * Returns the amount of space we need to reserve on the right hand side for the
      * self edges (0 if this has no self edges now)
@@ -802,6 +821,11 @@ public final strictfp class GraphNode {
 
     // ===================================================================================================
 
+    /** Returns the smallest even number that is not less than n. */
+    private static int even(int n) {
+        return n + (n & 1);
+    }
+
     /** (Re-)calculate this node's bounds. */
     void calcBounds() {
         reserved = (yShift = 0);
@@ -834,6 +858,7 @@ public final strictfp class GraphNode {
             hh = ad / 2;
         height = hh * 2;
         updown = hh;
+        Shape custom = null;
         switch (shape) {
             case HOUSE : {
                 yShift = ad / 2;
@@ -1029,6 +1054,146 @@ public final strictfp class GraphNode {
                 side = L;
                 break;
             }
+            case FOLDER : {
+                int t = even(Math.max(6, ad / 2)), tab = Math.max(14, (2 * hw) / 3);
+                if (tab > 2 * hw - t - 4)
+                    tab = Math.max(2, 2 * hw - t - 4);
+                yShift = t / 2;
+                updown = hh + t / 2;
+                poly.addPoint(-hw, -updown);
+                poly.addPoint(-hw + tab, -updown);
+                poly.addPoint(-hw + tab + t, -updown + t);
+                poly.addPoint(hw, -updown + t);
+                poly.addPoint(hw, updown);
+                poly.addPoint(-hw, updown);
+                GeneralPath line = new GeneralPath();
+                line.moveTo(-hw, -updown + t);
+                line.lineTo(-hw + tab + t, -updown + t);
+                poly2 = line;
+                break;
+            }
+            case DOCUMENT : {
+                int f = even(Math.max(8, ad / 2));
+                yShift = f / 2;
+                updown = hh + f / 2;
+                poly.addPoint(-hw, -updown);
+                poly.addPoint(hw - f, -updown);
+                poly.addPoint(hw, -updown + f);
+                poly.addPoint(hw, updown);
+                poly.addPoint(-hw, updown);
+                GeneralPath fold = new GeneralPath();
+                fold.moveTo(hw - f, -updown);
+                fold.lineTo(hw - f, -updown + f);
+                fold.lineTo(hw, -updown + f);
+                poly2 = fold;
+                break;
+            }
+            case ENVELOPE : {
+                int f = even(Math.max(10, ad));
+                yShift = f / 2;
+                updown = hh + f / 2;
+                poly.addPoint(-hw, -updown);
+                poly.addPoint(hw, -updown);
+                poly.addPoint(hw, updown);
+                poly.addPoint(-hw, updown);
+                GeneralPath flap = new GeneralPath();
+                flap.moveTo(-hw, -updown);
+                flap.lineTo(0, -updown + f);
+                flap.lineTo(hw, -updown);
+                poly2 = flap;
+                break;
+            }
+            case MAILBOX : {
+                int arch = even(Math.max(8, (2 * ad) / 3)), post = arch, pw = Math.max(3, Math.min(hw / 4, 6));
+                yShift = (arch - post) / 2;
+                updown = hh + (arch + post) / 2;
+                GeneralPath path = new GeneralPath();
+                path.moveTo(-hw, updown - post);
+                path.lineTo(-hw, -updown + arch);
+                path.quadTo(-hw, -updown, 0, -updown);
+                path.quadTo(hw, -updown, hw, -updown + arch);
+                path.lineTo(hw, updown - post);
+                path.lineTo(pw, updown - post);
+                path.lineTo(pw, updown);
+                path.lineTo(-pw, updown);
+                path.lineTo(-pw, updown - post);
+                path.closePath();
+                custom = path;
+                GeneralPath slot = new GeneralPath();
+                slot.moveTo(-hw / 2, -updown + (2 * arch) / 3);
+                slot.lineTo(hw / 2, -updown + (2 * arch) / 3);
+                poly2 = slot;
+                break;
+            }
+            case LOCK : {
+                int so = even(Math.min(hw - 2, Math.max(10, ad))), th = 4;
+                yShift = so / 2;
+                updown = hh + so / 2;
+                int bodyTop = -updown + so;
+                Area ring = new Area(new Ellipse2D.Double(-so, bodyTop - so, 2 * so, 2 * so));
+                ring.subtract(new Area(new Ellipse2D.Double(-so + th, bodyTop - so + th, 2 * (so - th), 2 * (so - th))));
+                Area all = new Area(new Rectangle(-hw, bodyTop, 2 * hw, 2 * hh));
+                all.add(ring);
+                custom = new GeneralPath(all);
+                break;
+            }
+            case KEY : {
+                int pad = ad / 2, ew = hw + pad, eh = hh + pad, blade = even(Math.max(16, ad + 4));
+                side = ew;
+                yShift = -blade / 2;
+                updown = eh + blade / 2;
+                int mid = -updown + eh;
+                GeneralPath bow = new GeneralPath();
+                bow.moveTo(-ew, mid);
+                bow.quadTo(-ew, mid - eh, 0, mid - eh);
+                bow.quadTo(ew, mid - eh, ew, mid);
+                bow.quadTo(ew, mid + eh, 0, mid + eh);
+                bow.quadTo(-ew, mid + eh, -ew, mid);
+                bow.closePath();
+                Area all = new Area(bow);
+                all.add(new Area(new Rectangle(-3, updown - blade - 3, 6, blade + 3)));
+                all.add(new Area(new Rectangle(3, updown - 5, 6, 5)));
+                all.add(new Area(new Rectangle(3, updown - 13, 6, 4)));
+                custom = new GeneralPath(all);
+                break;
+            }
+            case PERSON : {
+                int hr = Math.max(9, (2 * ad) / 3), arch = Math.max(6, ad / 2), extra = even(2 * hr + arch - 3);
+                yShift = extra / 2;
+                updown = hh + extra / 2;
+                int bodyTop = -updown + extra;
+                GeneralPath body = new GeneralPath();
+                body.moveTo(-hw, updown);
+                body.lineTo(-hw, bodyTop);
+                body.quadTo(-hw, bodyTop - arch, 0, bodyTop - arch);
+                body.quadTo(hw, bodyTop - arch, hw, bodyTop);
+                body.lineTo(hw, updown);
+                body.closePath();
+                Area all = new Area(body);
+                all.add(new Area(new Ellipse2D.Double(-hr, -updown, 2 * hr, 2 * hr)));
+                custom = new GeneralPath(all);
+                break;
+            }
+            case DATABASE : {
+                int e = even(Math.max(6, ad / 3));
+                yShift = e / 2;
+                updown = hh + (3 * e) / 2;
+                GeneralPath path = new GeneralPath();
+                path.moveTo(-hw, -updown + e);
+                path.quadTo(-hw, -updown, 0, -updown);
+                path.quadTo(hw, -updown, hw, -updown + e);
+                path.lineTo(hw, updown - e);
+                path.quadTo(hw, updown, 0, updown);
+                path.quadTo(-hw, updown, -hw, updown - e);
+                path.closePath();
+                custom = path;
+                GeneralPath rim = new GeneralPath();
+                rim.moveTo(-hw, -updown + e);
+                rim.quadTo(-hw, -updown + 2 * e, 0, -updown + 2 * e);
+                rim.quadTo(hw, -updown + 2 * e, hw, -updown + e);
+                poly2 = rim;
+                break;
+            }
             case EGG :
             case ELLIPSE : {
                 int pad = ad / 2;
@@ -1058,7 +1223,9 @@ public final strictfp class GraphNode {
                 poly.addPoint(-hw, hh);
             }
         }
-        if (shape != DotShape.EGG && shape != DotShape.ELLIPSE)
+        if (custom != null)
+            this.poly = custom;
+        else if (shape != DotShape.EGG && shape != DotShape.ELLIPSE)
             this.poly = poly;
         for (int i = 0; i < selfs.size(); i++) {
             if (i == 0) {

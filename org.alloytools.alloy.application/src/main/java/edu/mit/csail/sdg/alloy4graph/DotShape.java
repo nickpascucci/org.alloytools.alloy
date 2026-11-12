@@ -67,7 +67,23 @@ public enum DotShape {
                       /** Lined Square */
                       M_SQUARE("Lined Square", "Msquare"),
                       /** Lined Circle */
-                      M_CIRCLE("Lined Circle", "Mcircle");
+                      M_CIRCLE("Lined Circle", "Mcircle"),
+                      /** Folder: a box with a tab */
+                      FOLDER("Folder", "folder", "folder"),
+                      /** Document: a sheet with a folded corner */
+                      DOCUMENT("Document", "document", "note"),
+                      /** Envelope */
+                      ENVELOPE("Envelope", "envelope", "box"),
+                      /** Mailbox: an arched box on a post */
+                      MAILBOX("Mailbox", "mailbox", "box"),
+                      /** Padlock */
+                      LOCK("Lock", "lock", "box"),
+                      /** Key */
+                      KEY("Key", "key", "ellipse"),
+                      /** Person: head and shoulders */
+                      PERSON("Person", "person", "ellipse"),
+                      /** Database: a cylinder */
+                      DATABASE("Database", "database", "cylinder");
 
     /** The description of this line style. */
     private final String name;
@@ -78,10 +94,17 @@ public enum DotShape {
     /** The corresponding DOT attribute. */
     private final String dotName;
 
-    /** Constructs a DotShape object. */
+    /** Constructs a DotShape object whose icon file is named after its DOT attribute. */
     private DotShape(String name, String dotName) {
+        this(name, dotName, dotName);
+    }
+
+    /**
+     * Constructs a DotShape object; dotName is the closest shape that DOT offers.
+     */
+    private DotShape(String name, String iconName, String dotName) {
         this.name = name;
-        this.icon = OurUtil.loadIcon("icons/ShapeIcons/" + dotName + ".gif");
+        this.icon = OurUtil.loadIcon("icons/ShapeIcons/" + iconName + ".gif");
         this.dotName = dotName;
     }
 
