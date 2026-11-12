@@ -178,6 +178,18 @@ public final strictfp class GraphEdge {
         this(from, to, uuid, label, false, true, null, null, group);
     }
 
+    /**
+     * True if this edge only takes part in the layout and is never drawn nor found;
+     * it stands in for an edge between nodes of different graphs.
+     */
+    boolean hidden = false;
+
+    /** Sets whether this edge only takes part in the layout. */
+    GraphEdge hide(boolean hidden) {
+        this.hidden = hidden;
+        return this;
+    }
+
     /** Returns the "from" node. */
     public GraphNode a() {
         return a;
@@ -318,6 +330,20 @@ public final strictfp class GraphEdge {
      * Returns the current path; if the path was not yet assigned, it returns a
      * straight line from "from" node to "to" node.
      */
+    /** How this edge differs from the graph it is compared with; never null. */
+    private DiffMark diffMark = DiffMark.NONE;
+
+    /** Sets how this edge differs from the graph it is compared with. */
+    public GraphEdge set(DiffMark mark) {
+        diffMark = mark == null ? DiffMark.NONE : mark;
+        return this;
+    }
+
+    /** Returns how this edge differs from the graph it is compared with. */
+    public DiffMark diffMark() {
+        return diffMark;
+    }
+
     Curve path() {
         if (path == null)
             resetPath();
@@ -457,24 +483,14 @@ public final strictfp class GraphEdge {
      * current zoom scale, draw the edge.
      */
     void draw(Artist gr, double scale, GraphEdge highEdge, Object highGroup) {
+        if (hidden)
+            return;
         final int top = a.graph.getTop(), left = a.graph.getLeft();
         gr.translate(-left, -top);
-        if (highEdge == this) {
-            gr.setColor(color);
-            gr.set(DotStyle.BOLD, scale);
-        } else if ((highEdge == null && highGroup == null) || highGroup == group) {
-            gr.setColor(color);
-            gr.set(style, scale);
-        } else {
-            gr.setColor(Color.LIGHT_GRAY);
-            gr.set(style, scale);
-        }
-        if (a == b) {
-            gr.draw(path);
-        } else {
-            // Concatenate this path and its connected segments into a single
-            // VizPath object, then draw it
-            Curve p = null;
+        // Concatenate this path and its connected segments into a single
+        // VizPath object
+        Curve p = null;
+        if (a != b) {
             GraphEdge e = this;
             while (e.a.shape() == null)
                 e = e.a.ins.get(0); // Let e be the first segment of this chain
@@ -485,13 +501,41 @@ public final strictfp class GraphEdge {
                     break;
                 e = e.b.outs.get(0);
             }
-            gr.drawSmoothly(p);
         }
+        final boolean dimmed = !(highEdge == this || (highEdge == null && highGroup == null) || highGroup == group);
+        if (diffMark == DiffMark.ADDED && !dimmed) {
+            // A new edge runs on a wide band of the mark's color.
+            gr.setColor(DiffMark.tint(diffMark.color));
+            gr.setStroke(bandWidth, null, scale);
+            if (p == null)
+                gr.draw(path);
+            else
+                gr.drawSmoothly(p);
+        }
+        gr.setColor(dimmed ? Color.LIGHT_GRAY : shade());
+        if (highEdge == this)
+            gr.set(DotStyle.BOLD, scale);
+        else if (diffMark == DiffMark.REMOVED)
+            gr.setStroke(1.3f, GraphNode.ghostDash, scale);
+        else
+            gr.set(style, scale);
+        if (p == null)
+            gr.draw(path);
+        else
+            gr.drawSmoothly(p);
         gr.set(DotStyle.SOLID, scale);
         gr.translate(left, top);
         if (highEdge == null && highGroup == null && label.length() > 0)
-            drawLabel(gr, color, null);
+            drawLabel(gr, shade(), null);
         drawArrowhead(gr, scale, highEdge, highGroup);
+    }
+
+    /** The width of the band under a new edge. */
+    private static final float bandWidth = 7f;
+
+    /** Returns the color to draw this edge in: its own, faded if the edge is a ghost. */
+    private Color shade() {
+        return diffMark == DiffMark.REMOVED ? DiffMark.fade(color) : color;
     }
 
     /**
@@ -525,10 +569,10 @@ public final strictfp class GraphEdge {
         double fan = (style == DotStyle.BOLD ? bigFan : smallFan);
         if (highEdge == this) {
             fan = bigFan;
-            gr.setColor(color);
+            gr.setColor(shade());
             gr.set(DotStyle.BOLD, scale);
         } else if ((highEdge == null && highGroup == null) || highGroup == group) {
-            gr.setColor(color);
+            gr.setColor(shade());
             gr.set(style, scale);
         } else {
             gr.setColor(Color.LIGHT_GRAY);
@@ -576,7 +620,7 @@ public final strictfp class GraphEdge {
     @Override
     public String toString() {
         GraphNode a = this.a, b = this.b;
-        if (a.shape() == null)
+        if (a.shape() == null || hidden)
             return ""; // This means this edge is virtual
         while (b.shape() == null) {
             b = b.outs.get(0).b;
@@ -586,9 +630,9 @@ public final strictfp class GraphEdge {
             color = "0" + color;
         }
         StringBuilder out = new StringBuilder();
-        out.append("\"N" + a.pos() + "\"");
+        out.append("\"" + a.dotName() + "\"");
         out.append(" -> ");
-        out.append("\"N" + b.pos() + "\"");
+        out.append("\"" + b.dotName() + "\"");
         out.append(" [");
         out.append("uuid = \"" + (uuid == null ? "" : esc(uuid.toString())) + "\"");
         out.append(", color = \"#" + color + "\"");

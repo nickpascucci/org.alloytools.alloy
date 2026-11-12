@@ -188,6 +188,29 @@ final class MagicColor {
             // 3. re-use a shape family matched to something else -- just give
             // up for now
         }
+        domainShapes();
+    }
+
+    /**
+     * SEMANTIC/VISUAL: A sig named after an everyday thing (File, Dir, Message,
+     * Person...) gets the shape of that thing, and so do its subsigs unless their
+     * own names say otherwise.
+     */
+    private void domainShapes() {
+        final AlloyModel model = vizState.getCurrentModel();
+        for (final AlloyType t : model.getTypes()) {
+            if (t.isBuiltin)
+                continue;
+            if (DomainShapes.forName(t.getName()) != null) {
+                vizState.shape.put(t, DomainShapes.forName(t.getName()));
+                continue;
+            }
+            for (AlloyType up = model.getSuperType(t); up != null && !up.isBuiltin; up = model.getSuperType(up))
+                if (DomainShapes.forName(up.getName()) != null) {
+                    vizState.shape.put(t, null);
+                    break;
+                }
+        }
     }
 
     /** Helper for nodeShape(). */

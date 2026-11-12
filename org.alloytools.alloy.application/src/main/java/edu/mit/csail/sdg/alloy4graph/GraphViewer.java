@@ -100,6 +100,54 @@ public final strictfp class GraphViewer extends JPanel {
      */
     public final JPopupMenu   pop              = new JPopupMenu();
 
+    /**
+     * Sets the listener that is told the layout key of the node under the mouse
+     * (null when the mouse is over no such node) each time that changes.
+     */
+    public void setHoverListener(java.util.function.Consumer<String> listener) {
+        hoverListener = listener;
+    }
+
+    /** The listener set by setHoverListener; null if there is none. */
+    private java.util.function.Consumer<String> hoverListener = null;
+
+    /** What the hover listener was told last. */
+    private String                              hoverTold     = null;
+
+    /** Tells the hover listener the key of the highlighted node if that has changed. */
+    private void tellHover() {
+        String key = highlightedKey();
+        if (hoverListener != null && (key == null ? hoverTold != null : !key.equals(hoverTold)))
+            hoverListener.accept(key);
+        hoverTold = key;
+    }
+
+    /**
+     * Highlights the node that has the given layout key, as if the mouse were over
+     * it; null, or a key that no node has, removes the highlight.
+     */
+    public void highlightKey(String key) {
+        Object found = graph.nodeWithKey(key);
+        if (highlight != found) {
+            highlight = found;
+            repaint();
+        }
+        hoverTold = highlightedKey();
+    }
+
+    /**
+     * Returns the layout key of the highlighted node, or null if no node with a
+     * layout key is highlighted.
+     */
+    public String highlightedKey() {
+        return highlight instanceof GraphNode ? ((GraphNode) highlight).layoutKey() : null;
+    }
+
+    /** Returns the graph being displayed. */
+    public Graph getGraph() {
+        return graph;
+    }
+
     /** Locates the node or edge at the given (X,Y) location. */
     private Object alloyFind(int mouseX, int mouseY) {
         return graph.find(scale, mouseX, mouseY);
@@ -125,6 +173,8 @@ public final strictfp class GraphViewer extends JPanel {
             return ((GraphNode) selected).uuid;
         if (selected instanceof GraphEdge)
             return ((GraphEdge) selected).uuid;
+        if (selected instanceof CrossEdge)
+            return ((CrossEdge) selected).uuid;
         return null;
     }
 
@@ -137,6 +187,8 @@ public final strictfp class GraphViewer extends JPanel {
             return ((GraphNode) highlight).uuid;
         if (highlight instanceof GraphEdge)
             return ((GraphEdge) highlight).uuid;
+        if (highlight instanceof CrossEdge)
+            return ((CrossEdge) highlight).uuid;
         return null;
     }
 
@@ -170,11 +222,19 @@ public final strictfp class GraphViewer extends JPanel {
      * Construct a GraphViewer that displays the given graph.
      */
     public GraphViewer(JFrame parent, final Graph graph) {
+        this(parent, graph, null, false);
+    }
+
+    /**
+     * Construct a GraphViewer that displays the given graph, laid out to follow
+     * the given template (see {@link Graph#layout(LayoutTemplate, boolean)}).
+     */
+    public GraphViewer(JFrame parent, final Graph graph, LayoutTemplate template, boolean strict) {
         OurUtil.make(this, BLACK, WHITE, new EmptyBorder(0, 0, 0, 0));
         setBorder(null);
         this.scale = graph.defaultScale;
         this.graph = graph;
-        graph.layout();
+        graph.layout(template, strict);
         final JMenuItem zoomIn = new JMenuItem("Zoom In");
         final JMenuItem zoomOut = new JMenuItem("Zoom Out");
         final JMenuItem zoomToFit = new JMenuItem("Zoom to Fit");
@@ -241,6 +301,7 @@ public final strictfp class GraphViewer extends JPanel {
                 if (highlight != obj) {
                     highlight = obj;
                     alloyRepaint();
+                    tellHover();
                 }
             }
 
@@ -249,7 +310,8 @@ public final strictfp class GraphViewer extends JPanel {
                 if (selected instanceof GraphNode && dragButton == 1) {
                     int newX = (int) (oldX + (ev.getX() - oldMouseX) / scale);
                     int newY = (int) (oldY + (ev.getY() - oldMouseY) / scale);
-                    GraphNode n = (GraphNode) selected;
+                    // A node inside a container moves along with the outermost container.
+                    GraphNode n = ((GraphNode) selected).outermost();
                     if (n.x() != newX || n.y() != newY) {
                         n.tweak(newX, newY);
                         alloyRepaint();
@@ -292,8 +354,8 @@ public final strictfp class GraphViewer extends JPanel {
                     highlight = null;
                     alloyRepaint();
                     if (selected instanceof GraphNode) {
-                        oldX = ((GraphNode) selected).x();
-                        oldY = ((GraphNode) selected).y();
+                        oldX = ((GraphNode) selected).outermost().x();
+                        oldY = ((GraphNode) selected).outermost().y();
                     }
                 }
             }
@@ -303,6 +365,7 @@ public final strictfp class GraphViewer extends JPanel {
                 if (highlight != null) {
                     highlight = null;
                     alloyRepaint();
+                    tellHover();
                 }
             }
         });

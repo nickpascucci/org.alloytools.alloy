@@ -89,6 +89,14 @@ public final class AlloyAtom implements Comparable<AlloyAtom> {
             return type.getName() + index;
     }
 
+    /**
+     * Returns the name the solver gave this atom, such as "File$0"; it stays the
+     * same in every state of a trace.
+     */
+    public String getOriginalName() {
+        return originalName;
+    }
+
     /** Return the type of the AlloyAtom. */
     public AlloyType getType() {
         return type;

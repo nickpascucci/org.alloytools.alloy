@@ -565,7 +565,8 @@ public final class VizCustomizationPanel extends JPanel {
         JPanel merge = vizState.mergeArrows.pick(rel, "Merge arrows", "Merge opposing arrows between the same nodes as one bidirectional arrow");
         JPanel constraint = vizState.constraint.pick(rel, "Influence layout", "Whether this edge influences the graph layout");
         JPanel panel1 = OurUtil.makeVR(wcolor, visible, attr, constraint);
-        JPanel panel2 = OurUtil.makeVR(wcolor, back, merge);
+        JPanel container = vizState.container.pick(rel, "Show as container", "Draw each atom inside the atom this relation relates it from (or to, with Layout backwards), if there is exactly one such atom");
+        JPanel panel2 = OurUtil.makeVR(wcolor, back, merge, container);
         parent.add(makelabel("<html>&nbsp;" + Util.encode(rel.toString()) + "</html>"));
         parent.add(OurUtil.makeH(10, labelText, wcolor, 5, color, 5, style, 3, weightPanel, 2, null));
         parent.add(OurUtil.makeHT(wcolor, 10, panel1, 15, panel2, 2, null));

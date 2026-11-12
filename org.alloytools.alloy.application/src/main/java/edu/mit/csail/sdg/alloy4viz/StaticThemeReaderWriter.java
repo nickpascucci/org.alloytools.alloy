@@ -449,7 +449,7 @@ public final class StaticThemeReaderWriter {
     private static void parseEdgeViz(XMLNode xml, VizState view, AlloyRelation x) {
         /*
          * <edge visible="inherit/yes/no" label=".." color=".." style=".." weight=".."
-         * constraint=".." attribute="inherit/yes/no" merge="inherit/yes/no"
+         * constraint=".." container="inherit/yes/no" attribute="inherit/yes/no" merge="inherit/yes/no"
          * layout="inherit/yes/no"> zero or more RELATION </edge> Each attribute, if
          * omitted, means "no change". Note: BOOLEAN is tristate.
          */
@@ -463,6 +463,8 @@ public final class StaticThemeReaderWriter {
             view.layoutBack.put(x, getbool(xml, "layout"));
         if (has(xml, "constraint"))
             view.constraint.put(x, getbool(xml, "constraint"));
+        if (has(xml, "container"))
+            view.container.put(x, getbool(xml, "container"));
         if (has(xml, "style"))
             view.edgeStyle.put(x, parseDotStyle(xml));
         if (has(xml, "color"))
@@ -486,6 +488,7 @@ public final class StaticThemeReaderWriter {
         writeBool(out, "layout", view.layoutBack.get(x), defaultView.layoutBack.get(x));
         writeBool(out, "attribute", view.attribute.get(x), defaultView.attribute.get(x));
         writeBool(out, "constraint", view.constraint.get(x), defaultView.constraint.get(x));
+        writeBool(out, "container", view.container.get(x), defaultView.container.get(x));
         if (view.weight.get(x) != defaultView.weight.get(x))
             out.write(" weight=\"" + view.weight.get(x) + "\"");
         if (x != null && !view.label.get(x).equals(defaultView.label.get(x)))

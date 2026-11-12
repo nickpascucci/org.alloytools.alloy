@@ -379,6 +379,14 @@ public final class StaticInstanceReader {
 
     /** Parse the file into an AlloyInstance if possible. */
     private StaticInstanceReader(XMLNode root, int state) throws Err {
+        this(root, A4SolutionReader.read(new ArrayList<Sig>(), root), state);
+    }
+
+    /**
+     * Turn one state of the solution that was read from the given XML into an
+     * AlloyInstance.
+     */
+    private StaticInstanceReader(XMLNode root, A4Solution sol, int state) throws Err {
         XMLNode inst = null;
         for (XMLNode sub : root)
             if (sub.is("instance")) {
@@ -388,7 +396,6 @@ public final class StaticInstanceReader {
         if (inst == null)
             throw new ErrorSyntax("The XML file must contain an <instance> element.");
         boolean isMeta = "yes".equals(inst.getAttribute("metamodel"));
-        A4Solution sol = A4SolutionReader.read(new ArrayList<Sig>(), root);
         for (Sig s : sol.getAllReachableSigs())
             if (s instanceof PrimSig && ((PrimSig) s).parent == Sig.UNIV)
                 toplevels.add((PrimSig) s);
@@ -524,6 +531,26 @@ public final class StaticInstanceReader {
         int tracelen = Integer.valueOf(inst.getAttribute("tracelength"));
         int looplen = Integer.valueOf(inst.getAttribute("looplength"));
         ans = new AlloyInstance(sol, sol.getOriginalFilename(), sol.getOriginalCommand(), am, atom2sets, rels, isMeta,tracelen,looplen);
+    }
+
+    /**
+     * Parse the file once and return every state of its instance: the states of
+     * the trace prefix (up to where the trace loops back) for a trace, and a single
+     * state otherwise.
+     */
+    public static List<AlloyInstance> parseInstances(File file) throws Err {
+        try {
+            XMLNode root = new XMLNode(file);
+            A4Solution sol = A4SolutionReader.read(new ArrayList<Sig>(), root);
+            List<AlloyInstance> ans = new ArrayList<AlloyInstance>();
+            ans.add(new StaticInstanceReader(root, sol, 0).ans);
+            if (!ans.get(0).isMetamodel && sol.getMaxTrace() >= 0)
+                for (int i = 1; i < sol.getTraceLength(); i++)
+                    ans.add(new StaticInstanceReader(root, sol, i).ans);
+            return ans;
+        } catch (IOException ex) {
+            throw new ErrorFatal("Error reading the XML file: " + ex, ex);
+        }
     }
 
     /** Parse the file into an AlloyInstance if possible. */

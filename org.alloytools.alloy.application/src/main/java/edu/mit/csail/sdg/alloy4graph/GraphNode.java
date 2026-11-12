@@ -26,6 +26,9 @@ import static java.lang.StrictMath.sqrt;
 import java.awt.Color;
 import java.awt.Polygon;
 import java.awt.Shape;
+import java.awt.Rectangle;
+import java.awt.geom.Area;
+import java.awt.geom.Ellipse2D;
 import java.awt.geom.GeneralPath;
 import java.awt.geom.Rectangle2D;
 import java.util.ArrayList;
@@ -106,6 +109,17 @@ public final strictfp class GraphNode {
      * null) (need not be unique)
      */
     public final Object         uuid;
+
+    /**
+     * A name that identifies this node across different graphs (can be null); a
+     * LayoutTemplate uses it to give the same entity the same place in each graph.
+     */
+    private String              layoutKey = null;
+
+    /**
+     * The X coordinate that layout should pull this node towards (null if none).
+     */
+    Integer                     preferredX = null;
 
     /**
      * The X coordinate of the center of the node; modified by tweak(),
@@ -292,6 +306,31 @@ public final strictfp class GraphNode {
         graph.layerlist.get(layer).add(this);
     }
 
+    /** How this node differs from the graph it is compared with; never null. */
+    private DiffMark diffMark = DiffMark.NONE;
+
+    /** Sets how this node differs from the graph it is compared with. */
+    public GraphNode set(DiffMark mark) {
+        diffMark = mark == null ? DiffMark.NONE : mark;
+        return this;
+    }
+
+    /** Returns how this node differs from the graph it is compared with. */
+    public DiffMark diffMark() {
+        return diffMark;
+    }
+
+    /** Sets the name that identifies this node across graphs (can be null). */
+    public GraphNode setLayoutKey(String key) {
+        layoutKey = key;
+        return this;
+    }
+
+    /** Returns the name that identifies this node across graphs (can be null). */
+    public String layoutKey() {
+        return layoutKey;
+    }
+
     /**
      * Returns an unmodifiable view of the list of "in" edges.
      */
@@ -443,6 +482,174 @@ public final strictfp class GraphNode {
     }
 
     /**
+     * Returns the graph of the nodes inside this node. A node with a non-empty
+     * graph inside it is a container: it is drawn as a box around that graph, with
+     * its own labels on top.
+     */
+    public Graph inside() {
+        if (inner == null) {
+            inner = new Graph(graph.defaultScale, this);
+            updown = (-1);
+        }
+        return inner;
+    }
+
+    /** The graph of the nodes inside this node (null if there has never been one). */
+    private Graph inner    = null;
+
+    /**
+     * If this node is a container and (updown>=0), the place of the top left corner
+     * of the graph inside it, relative to the center of this node.
+     */
+    private int   innerDX  = 0, innerDY = 0;
+
+    /**
+     * If this node is a container and (updown>=0), the room its labels take above
+     * the graph inside it.
+     */
+    private int   headW    = 0, headH = 0;
+
+    /** The least room to leave for the labels of a container. */
+    private int   minHeadW = 0, minHeadH = 0;
+
+    /** Returns the node that this node is inside of, or null if there is none. */
+    public GraphNode container() {
+        return graph.owner;
+    }
+
+    /** Returns true if there are nodes inside this node. */
+    public boolean isContainer() {
+        return inner != null && shape != null && !inner.nodes.isEmpty();
+    }
+
+    /** Forgets the computed bounds, which the next use will compute again. */
+    void invalidate() {
+        updown = (-1);
+    }
+
+    /**
+     * Makes this node, when it is a container, leave at least the given room for
+     * its labels, so that it can match the size it has in another graph.
+     */
+    void reserveHead(int width, int height) {
+        minHeadW = width;
+        minHeadH = height;
+        updown = (-1);
+    }
+
+    /** Returns the width of the room for the labels of a container (0 if this is none). */
+    int headWidth() {
+        if (updown < 0)
+            calcBounds();
+        return headW;
+    }
+
+    /** Returns the height of the room for the labels of a container (0 if this is none). */
+    int headHeight() {
+        if (updown < 0)
+            calcBounds();
+        return headH;
+    }
+
+    /**
+     * Returns the shape this node is drawn in. A container keeps its shape if that
+     * is one of the box-like ones, which have room for content; otherwise it is a
+     * box.
+     */
+    private DotShape drawnShape() {
+        if (!isContainer() || shape == DotShape.FOLDER || shape == DotShape.DOCUMENT || shape == DotShape.DATABASE || shape == DotShape.MAILBOX)
+            return shape;
+        return DotShape.BOX;
+    }
+
+    /** Returns the outermost node that this node is inside of, or this node itself. */
+    GraphNode outermost() {
+        GraphNode n = this;
+        while (n.graph.owner != null)
+            n = n.graph.owner;
+        return n;
+    }
+
+    /** Returns true if this node is inside the given node, at any depth. */
+    boolean isInside(GraphNode other) {
+        for (GraphNode n = graph.owner; n != null; n = n.graph.owner)
+            if (n == other)
+                return true;
+        return false;
+    }
+
+    /**
+     * Assuming the outermost graph is laid out, returns the X coordinate of the
+     * center of this node in the coordinates of the outermost graph.
+     */
+    int absX() {
+        final GraphNode up = graph.owner;
+        if (up == null)
+            return centerX;
+        if (up.updown < 0)
+            up.calcBounds();
+        return up.absX() + up.innerDX + (centerX - graph.getLeft());
+    }
+
+    /** The same as absX(), for the Y coordinate. */
+    int absY() {
+        final GraphNode up = graph.owner;
+        if (up == null)
+            return centerY;
+        if (up.updown < 0)
+            up.calcBounds();
+        return up.absY() + up.innerDY + (centerY - graph.getTop());
+    }
+
+    /**
+     * Given a point in the coordinates of this node's graph that this container
+     * covers, returns what is there in the graph inside it (null if nothing is).
+     */
+    Object findInside(double scale, double x, double y) {
+        if (!isContainer())
+            return null;
+        if (updown < 0)
+            calcBounds();
+        return inner.findAt(scale, x - centerX - innerDX + inner.getLeft(), y - centerY - innerDY + inner.getTop());
+    }
+
+    /** Returns the name of this node in DOT output. */
+    String dotName() {
+        return graph.owner == null ? ("N" + pos) : (graph.owner.dotName() + "_" + pos);
+    }
+
+    /**
+     * Assuming the outermost graph is laid out, returns the bounding rectangle of
+     * this node in the coordinates of the outermost graph.
+     */
+    public Rectangle2D absoluteBox() {
+        if (updown < 0)
+            calcBounds();
+        return new Rectangle2D.Double(absX() - side, absY() - updown, side + side, updown + updown);
+    }
+
+    /**
+     * Returns the rectangle that the text labels are centered in; for a container,
+     * that is the strip above the graph inside it.
+     */
+    Rectangle2D labelBox() {
+        if (updown < 0)
+            calcBounds();
+        if (isContainer())
+            return new Rectangle2D.Double(x() - width / 2, y() + yShift - height / 2, width, innerDY - (yShift - height / 2));
+        return new Rectangle2D.Double(x() - width / 2, y() + yShift - height / 2, width, height);
+    }
+
+    /**
+     * Returns the lines drawn on top of the outline (null if the shape has none).
+     */
+    Shape decoration() {
+        if (updown < 0)
+            calcBounds();
+        return poly2;
+    }
+
+    /**
      * Returns the amount of space we need to reserve on the right hand side for the
      * self edges (0 if this has no self edges now)
      */
@@ -469,26 +676,39 @@ public final strictfp class GraphNode {
      * Draws this node at its current (x, y) location; this method will call
      * calcBounds() if necessary.
      */
-    void draw(Artist gr, double scale, boolean highlight) {
-        if (shape == null)
+    void draw(Artist gr, double scale, boolean highlight, Object allHighlight) {
+        if (this.shape == null)
             return;
         else if (updown < 0)
             calcBounds();
+        final DotShape shape = drawnShape();
+        final boolean container = isContainer();
+        // A container is paler than its color, so that what is inside it stands out.
+        final Color color = container ? DiffMark.tint(this.color) : this.color;
         final int top = graph.getTop(), left = graph.getLeft();
-        gr.set(style, scale);
+        final boolean round = shape == DotShape.CIRCLE || shape == DotShape.M_CIRCLE || shape == DotShape.DOUBLE_CIRCLE;
+        final boolean ghost = diffMark == DiffMark.REMOVED;
+        final Color outline = ghost ? DiffMark.fade(Color.BLACK) : Color.BLACK;
+        int radius = 0;
+        if (round) {
+            int hw = width / 2, hh = height / 2;
+            radius = ((int) (sqrt(hw * ((double) hw) + ((double) hh) * hh))) + 2;
+            if (shape == DotShape.DOUBLE_CIRCLE)
+                radius = radius + 5;
+        }
         gr.translate(centerX - left, centerY - top);
+        if (ghost)
+            gr.setStroke(1.3f, ghostDash, scale);
+        else
+            gr.set(style, scale);
         gr.setFont(fontBold);
         if (highlight)
             gr.setColor(COLOR_CHOSENNODE);
         else
-            gr.setColor(color);
-        if (shape == DotShape.CIRCLE || shape == DotShape.M_CIRCLE || shape == DotShape.DOUBLE_CIRCLE) {
-            int hw = width / 2, hh = height / 2;
-            int radius = ((int) (sqrt(hw * ((double) hw) + ((double) hh) * hh))) + 2;
-            if (shape == DotShape.DOUBLE_CIRCLE)
-                radius = radius + 5;
+            gr.setColor(ghost ? DiffMark.fade(color) : color);
+        if (round) {
             gr.fillCircle(radius);
-            gr.setColor(Color.BLACK);
+            gr.setColor(outline);
             gr.drawCircle(radius);
             if (style == DotStyle.DOTTED || style == DotStyle.DASHED)
                 gr.set(DotStyle.SOLID, scale);
@@ -503,7 +723,7 @@ public final strictfp class GraphNode {
                 gr.drawCircle(radius - 5);
         } else {
             gr.draw(poly, true);
-            gr.setColor(Color.BLACK);
+            gr.setColor(outline);
             gr.draw(poly, false);
             if (poly2 != null)
                 gr.draw(poly2, false);
@@ -526,9 +746,12 @@ public final strictfp class GraphNode {
         }
         gr.set(DotStyle.SOLID, scale);
         int clr = color.getRGB() & 0xFFFFFF;
-        gr.setColor((clr == 0x000000 || clr == 0xff0000 || clr == 0x0000ff) ? Color.WHITE : Color.BLACK);
+        if (ghost)
+            gr.setColor(Color.GRAY);
+        else
+            gr.setColor((clr == 0x000000 || clr == 0xff0000 || clr == 0x0000ff) ? Color.WHITE : Color.BLACK);
         if (labels != null && labels.size() > 0) {
-            int x = (-width / 2), y = yShift + (-labels.size() * ad / 2);
+            int x = (-width / 2), y = container ? (yShift - height / 2 + labelPadding) : (yShift + (-labels.size() * ad / 2));
             for (int i = 0; i < labels.size(); i++) {
                 String t = labels.get(i);
                 int w = ((int) (getBounds(fontBold, t).getWidth())) + 1; // Round
@@ -542,7 +765,75 @@ public final strictfp class GraphNode {
                 y = y + ad;
             }
         }
+        if (container) {
+            gr.translate(innerDX, innerDY);
+            inner.draw(gr, scale, allHighlight, false);
+            gr.translate(-innerDX, -innerDY);
+        }
+        if (diffMark != DiffMark.NONE) {
+            // The badge sits on the top right corner; on a circle, where the corner would be.
+            int bx = round ? (int) (radius * 0.7) : side, by = round ? (int) (-radius * 0.7) : -updown;
+            gr.translate(bx, by);
+            drawBadge(gr, diffMark, scale);
+            gr.translate(-bx, -by);
+        }
         gr.translate(left - centerX, top - centerY);
+    }
+
+    /**
+     * Draws the halo of this node if it is new or changed. The halo is a wide
+     * outline, the inner half of which draw() then covers; it is to be drawn before
+     * the edges, so that it does not hide where they meet the node.
+     */
+    void drawHalo(Artist gr, double scale) {
+        if (this.shape == null || (diffMark != DiffMark.ADDED && diffMark != DiffMark.CHANGED))
+            return;
+        else if (updown < 0)
+            calcBounds();
+        final DotShape shape = drawnShape();
+        final int top = graph.getTop(), left = graph.getLeft();
+        gr.translate(centerX - left, centerY - top);
+        gr.setStroke(haloWidth, null, scale);
+        gr.setColor(diffMark.color);
+        if (shape == DotShape.CIRCLE || shape == DotShape.M_CIRCLE || shape == DotShape.DOUBLE_CIRCLE) {
+            int hw = width / 2, hh = height / 2;
+            gr.drawCircle(((int) (sqrt(hw * ((double) hw) + ((double) hh) * hh))) + (shape == DotShape.DOUBLE_CIRCLE ? 7 : 2));
+        } else
+            gr.draw(poly, false);
+        gr.set(DotStyle.SOLID, scale);
+        gr.translate(left - centerX, top - centerY);
+    }
+
+    /** The width of the outline that makes the halo of a new or changed node. */
+    private static final float   haloWidth = 9f;
+
+    /**
+     * The dash pattern of a ghost; longer than that of DotStyle.DASHED, which the
+     * default theme gives to variable sigs.
+     */
+    static final float[]         ghostDash = new float[] {
+                                                          10f, 6f
+    };
+
+    /**
+     * Draws, centered on the origin, the badge that tells the given mark apart
+     * without relying on color: a plus for ADDED, a minus for REMOVED and a dot for
+     * CHANGED.
+     */
+    static void drawBadge(Artist gr, DiffMark mark, double scale) {
+        if (mark == DiffMark.NONE)
+            return;
+        gr.setColor(mark.color);
+        gr.fillCircle(6);
+        gr.setColor(Color.WHITE);
+        gr.setStroke(2f, null, scale);
+        if (mark == DiffMark.CHANGED)
+            gr.fillCircle(2);
+        else
+            gr.drawLine(-3, 0, 3, 0);
+        if (mark == DiffMark.ADDED)
+            gr.drawLine(0, -3, 0, 3);
+        gr.set(DotStyle.SOLID, scale);
     }
 
     /**
@@ -692,6 +983,11 @@ public final strictfp class GraphNode {
 
     // ===================================================================================================
 
+    /** Returns the smallest even number that is not less than n. */
+    private static int even(int n) {
+        return n + (n & 1);
+    }
+
     /** (Re-)calculate this node's bounds. */
     void calcBounds() {
         reserved = (yShift = 0);
@@ -702,8 +998,10 @@ public final strictfp class GraphNode {
         if (height < dummyHeight)
             updown = dummyHeight / 2;
         poly = (poly2 = (poly3 = null));
-        if (shape == null)
+        headW = (headH = 0);
+        if (this.shape == null)
             return;
+        final DotShape shape = drawnShape();
         Polygon poly = new Polygon();
         if (labels != null)
             for (int i = 0; i < labels.size(); i++) {
@@ -714,6 +1012,12 @@ public final strictfp class GraphNode {
                     width = ww;
                 height = height + ad;
             }
+        if (isContainer()) {
+            headW = Math.max(width, minHeadW);
+            headH = Math.max((labels == null || labels.isEmpty()) ? 0 : (labels.size() * ad + labelPadding), minHeadH);
+            width = Math.max(headW, inner.getTotalWidth());
+            height = headH + inner.getTotalHeight();
+        }
         int hw = ((width + 1) / 2) + labelPadding;
         if (hw < ad / 2)
             hw = ad / 2;
@@ -724,6 +1028,7 @@ public final strictfp class GraphNode {
             hh = ad / 2;
         height = hh * 2;
         updown = hh;
+        Shape custom = null;
         switch (shape) {
             case HOUSE : {
                 yShift = ad / 2;
@@ -919,6 +1224,146 @@ public final strictfp class GraphNode {
                 side = L;
                 break;
             }
+            case FOLDER : {
+                int t = even(Math.max(6, ad / 2)), tab = Math.max(14, (2 * hw) / 3);
+                if (tab > 2 * hw - t - 4)
+                    tab = Math.max(2, 2 * hw - t - 4);
+                yShift = t / 2;
+                updown = hh + t / 2;
+                poly.addPoint(-hw, -updown);
+                poly.addPoint(-hw + tab, -updown);
+                poly.addPoint(-hw + tab + t, -updown + t);
+                poly.addPoint(hw, -updown + t);
+                poly.addPoint(hw, updown);
+                poly.addPoint(-hw, updown);
+                GeneralPath line = new GeneralPath();
+                line.moveTo(-hw, -updown + t);
+                line.lineTo(-hw + tab + t, -updown + t);
+                poly2 = line;
+                break;
+            }
+            case DOCUMENT : {
+                int f = even(Math.max(8, ad / 2));
+                yShift = f / 2;
+                updown = hh + f / 2;
+                poly.addPoint(-hw, -updown);
+                poly.addPoint(hw - f, -updown);
+                poly.addPoint(hw, -updown + f);
+                poly.addPoint(hw, updown);
+                poly.addPoint(-hw, updown);
+                GeneralPath fold = new GeneralPath();
+                fold.moveTo(hw - f, -updown);
+                fold.lineTo(hw - f, -updown + f);
+                fold.lineTo(hw, -updown + f);
+                poly2 = fold;
+                break;
+            }
+            case ENVELOPE : {
+                int f = even(Math.max(10, ad));
+                yShift = f / 2;
+                updown = hh + f / 2;
+                poly.addPoint(-hw, -updown);
+                poly.addPoint(hw, -updown);
+                poly.addPoint(hw, updown);
+                poly.addPoint(-hw, updown);
+                GeneralPath flap = new GeneralPath();
+                flap.moveTo(-hw, -updown);
+                flap.lineTo(0, -updown + f);
+                flap.lineTo(hw, -updown);
+                poly2 = flap;
+                break;
+            }
+            case MAILBOX : {
+                int arch = even(Math.max(8, (2 * ad) / 3)), post = arch, pw = Math.max(3, Math.min(hw / 4, 6));
+                yShift = (arch - post) / 2;
+                updown = hh + (arch + post) / 2;
+                GeneralPath path = new GeneralPath();
+                path.moveTo(-hw, updown - post);
+                path.lineTo(-hw, -updown + arch);
+                path.quadTo(-hw, -updown, 0, -updown);
+                path.quadTo(hw, -updown, hw, -updown + arch);
+                path.lineTo(hw, updown - post);
+                path.lineTo(pw, updown - post);
+                path.lineTo(pw, updown);
+                path.lineTo(-pw, updown);
+                path.lineTo(-pw, updown - post);
+                path.closePath();
+                custom = path;
+                GeneralPath slot = new GeneralPath();
+                slot.moveTo(-hw / 2, -updown + (2 * arch) / 3);
+                slot.lineTo(hw / 2, -updown + (2 * arch) / 3);
+                poly2 = slot;
+                break;
+            }
+            case LOCK : {
+                int so = even(Math.min(hw - 2, Math.max(10, ad))), th = 4;
+                yShift = so / 2;
+                updown = hh + so / 2;
+                int bodyTop = -updown + so;
+                Area ring = new Area(new Ellipse2D.Double(-so, bodyTop - so, 2 * so, 2 * so));
+                ring.subtract(new Area(new Ellipse2D.Double(-so + th, bodyTop - so + th, 2 * (so - th), 2 * (so - th))));
+                Area all = new Area(new Rectangle(-hw, bodyTop, 2 * hw, 2 * hh));
+                all.add(ring);
+                custom = new GeneralPath(all);
+                break;
+            }
+            case KEY : {
+                int pad = ad / 2, ew = hw + pad, eh = hh + pad, blade = even(Math.max(16, ad + 4));
+                side = ew;
+                yShift = -blade / 2;
+                updown = eh + blade / 2;
+                int mid = -updown + eh;
+                GeneralPath bow = new GeneralPath();
+                bow.moveTo(-ew, mid);
+                bow.quadTo(-ew, mid - eh, 0, mid - eh);
+                bow.quadTo(ew, mid - eh, ew, mid);
+                bow.quadTo(ew, mid + eh, 0, mid + eh);
+                bow.quadTo(-ew, mid + eh, -ew, mid);
+                bow.closePath();
+                Area all = new Area(bow);
+                all.add(new Area(new Rectangle(-3, updown - blade - 3, 6, blade + 3)));
+                all.add(new Area(new Rectangle(3, updown - 5, 6, 5)));
+                all.add(new Area(new Rectangle(3, updown - 13, 6, 4)));
+                custom = new GeneralPath(all);
+                break;
+            }
+            case PERSON : {
+                int hr = Math.max(9, (2 * ad) / 3), arch = Math.max(6, ad / 2), extra = even(2 * hr + arch - 3);
+                yShift = extra / 2;
+                updown = hh + extra / 2;
+                int bodyTop = -updown + extra;
+                GeneralPath body = new GeneralPath();
+                body.moveTo(-hw, updown);
+                body.lineTo(-hw, bodyTop);
+                body.quadTo(-hw, bodyTop - arch, 0, bodyTop - arch);
+                body.quadTo(hw, bodyTop - arch, hw, bodyTop);
+                body.lineTo(hw, updown);
+                body.closePath();
+                Area all = new Area(body);
+                all.add(new Area(new Ellipse2D.Double(-hr, -updown, 2 * hr, 2 * hr)));
+                custom = new GeneralPath(all);
+                break;
+            }
+            case DATABASE : {
+                int e = even(Math.max(6, ad / 3));
+                yShift = e / 2;
+                updown = hh + (3 * e) / 2;
+                GeneralPath path = new GeneralPath();
+                path.moveTo(-hw, -updown + e);
+                path.quadTo(-hw, -updown, 0, -updown);
+                path.quadTo(hw, -updown, hw, -updown + e);
+                path.lineTo(hw, updown - e);
+                path.quadTo(hw, updown, 0, updown);
+                path.quadTo(-hw, updown, -hw, updown - e);
+                path.closePath();
+                custom = path;
+                GeneralPath rim = new GeneralPath();
+                rim.moveTo(-hw, -updown + e);
+                rim.quadTo(-hw, -updown + 2 * e, 0, -updown + 2 * e);
+                rim.quadTo(hw, -updown + 2 * e, hw, -updown + e);
+                poly2 = rim;
+                break;
+            }
             case EGG :
             case ELLIPSE : {
                 int pad = ad / 2;
@@ -948,7 +1393,13 @@ public final strictfp class GraphNode {
                 poly.addPoint(-hw, hh);
             }
         }
-        if (shape != DotShape.EGG && shape != DotShape.ELLIPSE)
+        if (isContainer()) {
+            innerDX = -inner.getTotalWidth() / 2;
+            innerDY = yShift - height / 2 + labelPadding + headH;
+        }
+        if (custom != null)
+            this.poly = custom;
+        else if (shape != DotShape.EGG && shape != DotShape.ELLIPSE)
             this.poly = poly;
         for (int i = 0; i < selfs.size(); i++) {
             if (i == 0) {
@@ -980,7 +1431,7 @@ public final strictfp class GraphNode {
             main = "0" + main;
         }
         StringBuilder out = new StringBuilder();
-        out.append("\"N" + pos + "\"");
+        out.append("\"" + dotName() + "\"");
         out.append(" [");
         out.append("uuid=\"");
         if (uuid != null)
