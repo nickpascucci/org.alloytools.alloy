@@ -130,11 +130,12 @@ public class OurLineNumberWidget extends JComponent implements DocumentListener,
                         maxDigits = formattedLineNumber.length();
                     }
 
-                    g.setColor(Color.BLACK);
+                    g.setColor(OurTheme.TEXT);
                     if (ifCaretOnSameLine(docLoc, rootElement)) {
                         Rectangle currentLineViewRec = textPane.modelToView(docLoc);
+                        g.setColor(OurTheme.CURRENT_LINE_BAR);
                         g.fillRect(0, currentLineViewRec.y, width, currentLineViewRec.height-1 );
-                        g.setColor(Color.YELLOW);
+                        g.setColor(OurTheme.CURRENT_LINE_NUMBER);
                     }
                     g.setFont(font);
                     g.drawString(formattedLineNumber, x, y);

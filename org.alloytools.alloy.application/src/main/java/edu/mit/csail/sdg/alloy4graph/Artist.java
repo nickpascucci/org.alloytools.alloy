@@ -31,6 +31,7 @@ import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 
 import edu.mit.csail.sdg.alloy4.OurPDFWriter;
+import edu.mit.csail.sdg.alloy4.OurTheme;
 
 /**
  * This class abstracts the drawing operations so that we can draw the graph
@@ -53,13 +54,27 @@ public final strictfp class Artist {
     /** The corresponding OurPDFWriter. */
     private OurPDFWriter        pdf;
 
+    /** Whether colors are carried over to the dark canvas. */
+    private boolean             darkCanvas;
+
     /**
      * Construct an artist that acts as a wrapper around the given Graphics2D
      * object.
      */
     public Artist(Graphics2D graphics2D) {
+        this(graphics2D, false);
+    }
+
+    /**
+     * Construct an artist that acts as a wrapper around the given Graphics2D
+     * object; if darkCanvas is true, every color is carried over to the dark canvas
+     * with {@link OurTheme#onDark(Color)}, so that a drawing made for a white
+     * background reads equally well on the dark one.
+     */
+    public Artist(Graphics2D graphics2D, boolean darkCanvas) {
         this.gr = graphics2D;
         this.pdf = null;
+        this.darkCanvas = darkCanvas;
     }
 
     /**
@@ -106,7 +121,7 @@ public final strictfp class Artist {
     /** Changes the current color. */
     public void setColor(Color color) {
         if (gr != null)
-            gr.setColor(color);
+            gr.setColor(darkCanvas ? OurTheme.onDark(color) : color);
         else
             pdf.setColor(color);
     }

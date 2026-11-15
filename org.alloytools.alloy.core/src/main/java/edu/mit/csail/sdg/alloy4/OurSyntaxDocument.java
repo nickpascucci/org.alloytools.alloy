@@ -17,7 +17,6 @@ package edu.mit.csail.sdg.alloy4;
 
 import static edu.mit.csail.sdg.alloy4.OurConsole.style;
 
-import java.awt.Color;
 import java.awt.Font;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
@@ -76,80 +75,80 @@ class OurSyntaxDocument extends DefaultStyledDocument {
     private final List<MutableAttributeSet> all              = new ArrayList<>();
 
     /** The character style for regular text. */
-    private final MutableAttributeSet       styleNormal      = style(font, fontSize, false, false, false, Color.BLACK, 0);
+    private final MutableAttributeSet       styleNormal      = style(font, fontSize, false, false, false, OurTheme.TEXT, 0);
     {
         all.add(styleNormal);
     }
 
     /** The character style for symbols. */
-    private final MutableAttributeSet styleSymbol = style(font, fontSize, true, false, false, Color.BLACK, 0);
+    private final MutableAttributeSet styleSymbol = style(font, fontSize, true, false, false, OurTheme.TEXT, 0);
     {
         all.add(styleSymbol);
     }
 
     /** The character style for YAML header bars. */
-    private final MutableAttributeSet yamlHeaderBars = style(font, fontSize, false, false, false, new Color(0xD86556), 0);
+    private final MutableAttributeSet yamlHeaderBars = style(font, fontSize, false, false, false, OurTheme.SYNTAX_YAML_BAR, 0);
     {
         all.add(yamlHeaderBars);
     }
     /** The character style for YAML header field. */
-    private final MutableAttributeSet yamlHeaderLines = style(font, fontSize, false, false, false, new Color(0xC58D6D), 0);
+    private final MutableAttributeSet yamlHeaderLines = style(font, fontSize, false, false, false, OurTheme.SYNTAX_YAML_LINE, 0);
     {
         all.add(yamlHeaderLines);
     }
 
     /** The character style for ### field. */
-    private final MutableAttributeSet styleHead3 = style(font, fontSize + 2, true, false, false, new Color(0x772222), 0);
+    private final MutableAttributeSet styleHead3 = style(font, fontSize + 2, true, false, false, OurTheme.SYNTAX_HEADING, 0);
     {
         all.add(styleHead3);
     }
     /** The character style for ## field. */
-    private final MutableAttributeSet styleHead2 = style(font, fontSize + 4, true, false, false, new Color(0x772222), 0);
+    private final MutableAttributeSet styleHead2 = style(font, fontSize + 4, true, false, false, OurTheme.SYNTAX_HEADING, 0);
     {
         all.add(styleHead2);
     }
     /** The character style for # field. */
-    private final MutableAttributeSet styleHead1 = style(font, fontSize + 20, true, false, false, new Color(0x772222), 0);
+    private final MutableAttributeSet styleHead1 = style(font, fontSize + 20, true, false, false, OurTheme.SYNTAX_HEADING, 0);
     {
         all.add(styleHead1);
     }
     /** The character style for **word**. */
-    private final MutableAttributeSet styleBold = style(font, fontSize, true, false, false, Color.BLACK, 0);
+    private final MutableAttributeSet styleBold = style(font, fontSize, true, false, false, OurTheme.TEXT, 0);
     {
         all.add(styleBold);
     }
     /** The character style for _emphasis_. */
-    private final MutableAttributeSet styleEmphasis = style(font, fontSize, false, true, false, Color.BLACK, 0);
+    private final MutableAttributeSet styleEmphasis = style(font, fontSize, false, true, false, OurTheme.TEXT, 0);
     {
         all.add(styleEmphasis);
     }
 
     /** The character style for ~strikethrough~. */
-    private final MutableAttributeSet styleStrikeThrough = style(font, fontSize, false, false, true, Color.BLACK, 0);
+    private final MutableAttributeSet styleStrikeThrough = style(font, fontSize, false, false, true, OurTheme.TEXT, 0);
     {
         all.add(styleEmphasis);
     }
 
     /** The character style for YAML header field. */
-    private final MutableAttributeSet alloyMarker = style(font, fontSize, false, false, false, new Color(0x84D5D0), 0);
+    private final MutableAttributeSet alloyMarker = style(font, fontSize, false, false, false, OurTheme.SYNTAX_MARKER, 0);
     {
         all.add(alloyMarker);
     }
 
     /** The character style for integer constants. */
-    private final MutableAttributeSet styleNumber = style(font, fontSize, true, false, false, new Color(0xA80A0A), 0);
+    private final MutableAttributeSet styleNumber = style(font, fontSize, true, false, false, OurTheme.SYNTAX_NUMBER, 0);
     {
         all.add(styleNumber);
     }
 
     /** The character style for keywords. */
-    private final MutableAttributeSet styleKeyword = style(font, fontSize, true, false, false, new Color(0x1E1EA8), 0);
+    private final MutableAttributeSet styleKeyword = style(font, fontSize, true, false, false, OurTheme.SYNTAX_KEYWORD, 0);
     {
         all.add(styleKeyword);
     }
 
     /** The character style for string literals. */
-    private final MutableAttributeSet styleString = style(font, fontSize, false, false, false, new Color(0xA80AA8), 0);
+    private final MutableAttributeSet styleString = style(font, fontSize, false, false, false, OurTheme.SYNTAX_STRING, 0);
     {
         all.add(styleString);
     }
@@ -157,7 +156,7 @@ class OurSyntaxDocument extends DefaultStyledDocument {
     /**
      * The character style for up-to-end-of-line-style comment.
      */
-    private final MutableAttributeSet styleComment = style(font, fontSize, false, false, false, new Color(0x0A940A), 0);
+    private final MutableAttributeSet styleComment = style(font, fontSize, false, false, false, OurTheme.SYNTAX_COMMENT, 0);
     {
         all.add(styleComment);
     }
@@ -165,13 +164,13 @@ class OurSyntaxDocument extends DefaultStyledDocument {
     /**
      * The character style for non-javadoc-style block comment.
      */
-    private final MutableAttributeSet styleBlock = style(font, fontSize, false, false, false, new Color(0x0A940A), 0);
+    private final MutableAttributeSet styleBlock = style(font, fontSize, false, false, false, OurTheme.SYNTAX_COMMENT, 0);
     {
         all.add(styleBlock);
     }
 
     /** The character style for javadoc-style block comment. */
-    private final MutableAttributeSet styleJavadoc = style(font, fontSize, true, false, false, new Color(0x0A940A), 0);
+    private final MutableAttributeSet styleJavadoc = style(font, fontSize, true, false, false, OurTheme.SYNTAX_COMMENT, 0);
     {
         all.add(styleJavadoc);
     }

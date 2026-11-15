@@ -90,6 +90,7 @@ import edu.mit.csail.sdg.alloy4.OurBorder;
 import edu.mit.csail.sdg.alloy4.OurCheckbox;
 import edu.mit.csail.sdg.alloy4.OurConsole;
 import edu.mit.csail.sdg.alloy4.OurDialog;
+import edu.mit.csail.sdg.alloy4.OurTheme;
 import edu.mit.csail.sdg.alloy4.OurUtil;
 import edu.mit.csail.sdg.alloy4.Runner;
 import edu.mit.csail.sdg.alloy4.Util;
@@ -125,7 +126,7 @@ import edu.mit.csail.sdg.translator.A4TupleSet;
 public final class VizGUI implements ComponentListener {
 
     /** The background color for the toolbar. */
-    private static final Color  background      = new Color(0.9f, 0.9f, 0.9f);
+    private static final Color  background      = OurTheme.PANEL;
 
     /** The icon for a "checked" menu item. */
     private static final Icon   iconYes         = OurUtil.loadIcon("images/menu1.gif");
@@ -353,7 +354,7 @@ public final class VizGUI implements ComponentListener {
 
     /** Add a vertical divider to the toolbar. */
     private void addDivider() {
-        JPanel divider = OurUtil.makeH(new Dimension(1, 40), Color.LIGHT_GRAY);
+        JPanel divider = OurUtil.makeH(new Dimension(1, 40), OurTheme.BORDER);
         divider.setAlignmentY(0.5f);
         if (!Util.onMac())
             toolbar.add(OurUtil.makeH(5, background));
@@ -867,6 +868,14 @@ public final class VizGUI implements ComponentListener {
     }
 
     /**
+     * Redraws the parts of this window whose colors are fixed when they are built;
+     * to be called after the application switched between the light and dark theme.
+     */
+    public void themeChanged() {
+        updateDisplay();
+    }
+
+    /**
      * Helper method that refreshes the right-side visualization panel with the
      * latest settings.
      */
@@ -989,7 +998,7 @@ public final class VizGUI implements ComponentListener {
         switch (currentMode) {
             case Tree : {
                 final VizTree t = new VizTree(myStates.get(0).getOriginalInstance().originalA4, makeVizTitle(), fontSize, current);
-                final JScrollPane scroll = OurUtil.scrollpane(t, Color.BLACK, Color.WHITE, new OurBorder(true, false, true, false));
+                final JScrollPane scroll = OurUtil.scrollpane(t, OurTheme.TEXT, OurTheme.TEXT_BACKGROUND, new OurBorder(true, false, true, false));
                 scroll.addFocusListener(new FocusListener() {
 
                     @Override
@@ -1198,7 +1207,7 @@ public final class VizGUI implements ComponentListener {
                     dfs = findDiffs(texts.get(i - 1), texts.get(i), currentMode);
 
                 Highlighter highlighter = ta.getHighlighter();
-                HighlightPainter painter = new DefaultHighlighter.DefaultHighlightPainter(Color.YELLOW);
+                HighlightPainter painter = new DefaultHighlighter.DefaultHighlightPainter(OurTheme.FOUND);
                 for (Entry<Integer,Integer> df : dfs)
                     highlighter.addHighlight(df.getKey(), df.getKey() + df.getValue(), painter);
             } catch (BadLocationException e) {
@@ -1888,8 +1897,10 @@ public final class VizGUI implements ComponentListener {
         DiffMark[] marks = {
                             DiffMark.ADDED, DiffMark.REMOVED, DiffMark.CHANGED
         };
-        for (int i = 0; i < marks.length; i++)
-            sb.append(String.format(" &nbsp; <b><font color='#%06x'>%s</font></b>", marks[i].color.getRGB() & 0xFFFFFF, names[i]));
+        for (int i = 0; i < marks.length; i++) {
+            Color shown = OurTheme.isDark() ? OurTheme.onDark(marks[i].color) : marks[i].color;
+            sb.append(String.format(" &nbsp; <b><font color='%s'>%s</font></b>", OurTheme.hex(shown), names[i]));
+        }
         JLabel key = new JLabel(sb.append("</html>").toString());
         key.setBorder(javax.swing.BorderFactory.createEmptyBorder(2, 8, 2, 8));
         key.setFont(OurUtil.getVizFont().deriveFont(11f));
@@ -2236,9 +2247,9 @@ public final class VizGUI implements ComponentListener {
                     int max = normalize(current + getVizState().size() - 1, lmx, lox);
                     int min = normalize(current, lmx, lox);
                     if ((min <= max && i >= min && i <= max) || (min > max && (i >= min || (i <= max && i >= lox)))) {
-                        g2.setColor(storyShown && i == VizGUI.this.current ? new Color(200, 225, 255) : new Color(255, 255, 255));
+                        g2.setColor(storyShown && i == VizGUI.this.current ? OurTheme.HEADER_SELECTED : OurTheme.TEXT_BACKGROUND);
                     } else {
-                        g2.setColor(new Color(120, 120, 120));
+                        g2.setColor(OurTheme.TRACE_OUTSIDE);
                     }
                     g2.fill(circl);
                     g2.setColor(tmp);
@@ -2248,7 +2259,7 @@ public final class VizGUI implements ComponentListener {
                     g2.drawString(lbl, i * dist + radius + offsetx - (mets.stringWidth(lbl) / 2), offsety + (mets.getAscent() / 2));
                     states.add(circl);
                     g2.setStroke(new BasicStroke(1));
-                    g2.setColor(new Color(0, 0, 0));
+                    g2.setColor(OurTheme.TEXT);
                 }
 
                 Polygon arrowHead = new Polygon();

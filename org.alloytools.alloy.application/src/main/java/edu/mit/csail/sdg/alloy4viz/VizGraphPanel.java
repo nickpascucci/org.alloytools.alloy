@@ -16,7 +16,6 @@
 package edu.mit.csail.sdg.alloy4viz;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.GridLayout;
@@ -54,6 +53,7 @@ import javax.swing.border.EmptyBorder;
 import edu.mit.csail.sdg.alloy4.ConstList;
 import edu.mit.csail.sdg.alloy4.OurBorder;
 import edu.mit.csail.sdg.alloy4.OurCombobox;
+import edu.mit.csail.sdg.alloy4.OurTheme;
 import edu.mit.csail.sdg.alloy4.OurUtil;
 import edu.mit.csail.sdg.alloy4.Util;
 import edu.mit.csail.sdg.alloy4graph.GraphViewer;
@@ -302,7 +302,7 @@ public final class VizGraphPanel extends JPanel {
         this.firstState = firstState;
         this.onSelectFrame = onSelectFrame;
         Border b = new EmptyBorder(0, 0, 0, 0);
-        OurUtil.make(this, Color.BLACK, Color.WHITE, b);
+        OurUtil.make(this, OurTheme.TEXT, OurTheme.TEXT_BACKGROUND, b);
         this.seeDot = seeDot;
         this.vizState = vizState;
         setLayout(new GridLayout());
@@ -325,7 +325,7 @@ public final class VizGraphPanel extends JPanel {
         JComponent diagrams = diagramsScrollPanels;
         if (onSelectFrame != null) {
             // The frames keep their own size, and the strip as a whole scrolls.
-            diagramsScrollPanels.setBackground(Color.WHITE);
+            diagramsScrollPanels.setBackground(OurTheme.TEXT_BACKGROUND);
             diagramsScrollPanels.add(Box.createHorizontalGlue());
             diagrams = OurUtil.scrollpane(diagramsScrollPanels, new OurBorder(true, false, true, false));
         }
@@ -347,7 +347,7 @@ public final class VizGraphPanel extends JPanel {
     private JScrollPane createGraphPanel(int i) {
         Border b = new EmptyBorder(0, 0, 0, 0);
 
-        JPanel graphPanel = OurUtil.make(new JPanel(), Color.BLACK, Color.WHITE, b);
+        JPanel graphPanel = OurUtil.make(new JPanel(), OurTheme.TEXT, OurTheme.TEXT_BACKGROUND, b);
         graphPanels.add(graphPanel);
         graphPanel.addMouseListener(new MouseAdapter() {
 
@@ -459,7 +459,7 @@ public final class VizGraphPanel extends JPanel {
         });
         headings.add(heading);
         JPanel frame = new JPanel(new BorderLayout());
-        frame.setBackground(Color.WHITE);
+        frame.setBackground(OurTheme.TEXT_BACKGROUND);
         frame.setBorder(new OurBorder(false, false, false, true));
         frame.add(heading, BorderLayout.NORTH);
         frame.add(graphPane, BorderLayout.CENTER);
@@ -477,7 +477,7 @@ public final class VizGraphPanel extends JPanel {
             JLabel heading = headings.get(i);
             heading.setText(continuity == null ? "State " + (firstState + i) : continuity.title(firstState + i));
             heading.setFont(heading.getFont().deriveFont(selected ? Font.BOLD : Font.PLAIN));
-            heading.setBackground(selected ? new Color(200, 225, 255) : new Color(238, 238, 238));
+            heading.setBackground(selected ? OurTheme.HEADER_SELECTED : OurTheme.HEADER);
         }
         if (viewer == null || viewer.isEmpty())
             return;
@@ -542,7 +542,7 @@ public final class VizGraphPanel extends JPanel {
                     viewer = null;
                 graphPanels.get(i).removeAll();
                 graphPanels.get(i).add(graph);
-                graphPanels.get(i).setBackground(Color.WHITE);
+                graphPanels.get(i).setBackground(OurTheme.TEXT_BACKGROUND);
                 diagramScrollPanels.get(i).setViewportView(graphPanels.get(i));
                 diagramScrollPanels.get(i).invalidate();
                 diagramScrollPanels.get(i).repaint();

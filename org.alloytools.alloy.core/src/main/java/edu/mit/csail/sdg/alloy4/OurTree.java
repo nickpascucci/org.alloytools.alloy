@@ -124,7 +124,7 @@ public abstract class OurTree extends JTree {
         @Override
         public void paint(Graphics g) {
             int w = getWidth(), h = getHeight(), y = h - height;
-            Color background = isSelected ? UIManager.getColor("Tree.selectionBackground") : Color.WHITE;
+            Color background = isSelected ? UIManager.getColor("Tree.selectionBackground") : OurTheme.TEXT_BACKGROUND;
             Color border = isFocused ? UIManager.getColor("Tree.selectionBorderColor") : null;
             if (background != null) {
                 g.setColor(background);
@@ -243,8 +243,8 @@ public abstract class OurTree extends JTree {
         getSelectionModel().setSelectionMode(TreeSelectionModel.SINGLE_TREE_SELECTION);
         putClientProperty("JTree.lineStyle", "Angled");
         setRootVisible(true);
-        setForeground(Color.BLACK);
-        setBackground(Color.WHITE);
+        setForeground(OurTheme.TEXT);
+        setBackground(OurTheme.TEXT_BACKGROUND);
         setOpaque(true);
         addTreeSelectionListener(new TreeSelectionListener() {
 

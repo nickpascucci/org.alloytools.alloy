@@ -6,7 +6,8 @@
 	org.alloytools.alloy.core;version=latest,\
 	aQute.libg,\
 	org.alloytools.api,\
-	org.alloytools.pardinus.core
+	org.alloytools.pardinus.core,\
+	com.formdev:flatlaf
 -testpath: \
 	biz.aQute.wrapper.junit, \
 	biz.aQute.wrapper.hamcrest, \

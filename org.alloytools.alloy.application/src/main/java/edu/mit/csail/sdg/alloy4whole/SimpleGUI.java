@@ -28,7 +28,7 @@ import static edu.mit.csail.sdg.alloy4.A4Preferences.FontName;
 import static edu.mit.csail.sdg.alloy4.A4Preferences.FontSize;
 import static edu.mit.csail.sdg.alloy4.A4Preferences.ImplicitThis;
 import static edu.mit.csail.sdg.alloy4.A4Preferences.InferPartialInstance;
-import static edu.mit.csail.sdg.alloy4.A4Preferences.LAF;
+import static edu.mit.csail.sdg.alloy4.A4Preferences.Appearance;
 import static edu.mit.csail.sdg.alloy4.A4Preferences.LineNumbers;
 import static edu.mit.csail.sdg.alloy4.A4Preferences.Model0;
 import static edu.mit.csail.sdg.alloy4.A4Preferences.Model1;
@@ -152,6 +152,7 @@ import edu.mit.csail.sdg.alloy4.OurDialog;
 import edu.mit.csail.sdg.alloy4.OurSyntaxWidget;
 import edu.mit.csail.sdg.alloy4.OurTabbedSyntaxWidget;
 import edu.mit.csail.sdg.alloy4.OurTree;
+import edu.mit.csail.sdg.alloy4.OurTheme;
 import edu.mit.csail.sdg.alloy4.OurUtil;
 import edu.mit.csail.sdg.alloy4.Pair;
 import edu.mit.csail.sdg.alloy4.Pos;
@@ -285,7 +286,7 @@ public final class SimpleGUI implements ComponentListener, Listener {
      * The darker background color (for the MessageLog window and the Toolbar and
      * the Status Bar, etc.)
      */
-    private static final Color    background             = new Color(0.9f, 0.9f, 0.9f);
+    private static final Color    background             = OurTheme.PANEL;
 
     /**
      * If subrunning==true: 0 means SAT solving; 1 means metamodel; 2 means global
@@ -404,7 +405,7 @@ public final class SimpleGUI implements ComponentListener, Listener {
         int c = t.getCaret();
         int y = t.getLineOfOffset(c) + 1;
         int x = c - t.getLineStartOffset(y - 1) + 1;
-        status.setText("<html>&nbsp; Line " + y + ", Column " + x + (t.modified() ? " <b style=\"color:#B43333;\">[modified]</b></html>" : "</html>"));
+        status.setText("<html>&nbsp; Line " + y + ", Column " + x + (t.modified() ? " <b style=\"color:" + OurTheme.hex(OurTheme.TEXT_WARNING) + ";\">[modified]</b></html>" : "</html>"));
         return null;
     }
 
@@ -919,27 +920,11 @@ public final class SimpleGUI implements ComponentListener, Listener {
         return null;
     }
 
-    /**
-     * This method applies the look and feel stored in a user preference. Default
-     * look and feel for Mac and Windows computers is "Native", and for other is
-     * "Cross-platform".
-     */
+    /** Applies the theme stored in the user's preference to every window. */
     private Runner doLookAndFeel() {
         if (wrap)
             return wrapMe();
-        try {
-            if ("Native".equals(LAF.get())) {
-                UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-            } else {
-                UIManager.setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName());
-            }
-            if (frame != null) {
-                SwingUtilities.updateComponentTreeUI(frame);
-                SwingUtilities.updateComponentTreeUI(prefDialog);
-                SwingUtilities.updateComponentTreeUI(viz.getFrame());
-            }
-        } catch (Throwable e) {
-        }
+        AppTheme.applyPreference();
         return null;
     }
 
@@ -1367,7 +1352,7 @@ public final class SimpleGUI implements ComponentListener, Listener {
                 menuItem(optmenu, "Use anti-aliasing: Yes", false);
             else
                 addToMenu(optmenu, AntiAlias);
-            addToMenu(optmenu, A4Preferences.LAF);
+            addToMenu(optmenu, Appearance);
             addToMenu(optmenu, LineNumbers);
 
             optmenu.addSeparator();
@@ -1462,10 +1447,10 @@ public final class SimpleGUI implements ComponentListener, Listener {
 
         HTMLEditorKit kit = new HTMLEditorKit();
         StyleSheet styleSheet = kit.getStyleSheet();
-        styleSheet.addRule("body {color:#000; font-family:Verdana, Trebuchet MS,Geneva, sans-serif; font-size: 10px; margin: 4px; }");
-        styleSheet.addRule("h1 {color: blue;}");
-        styleSheet.addRule("h2 {color: #ff0000;}");
-        styleSheet.addRule("pre {font : 10px monaco; color : black; background-color: #C0C0C0; padding: 4px; margin: 4px; }");
+        styleSheet.addRule("body {color:" + OurTheme.hex(OurTheme.TEXT) + "; font-family:Verdana, Trebuchet MS,Geneva, sans-serif; font-size: 10px; margin: 4px; }");
+        styleSheet.addRule("h1 {color: " + OurTheme.hex(OurTheme.TEXT_GOOD) + ";}");
+        styleSheet.addRule("h2 {color: " + OurTheme.hex(OurTheme.TEXT_ERROR) + ";}");
+        styleSheet.addRule("pre {font : 10px monaco; color : " + OurTheme.hex(OurTheme.TEXT) + "; background-color: " + OurTheme.hex(OurTheme.BORDER) + "; padding: 4px; margin: 4px; }");
         styleSheet.addRule("th {text-align:left;}");
 
         JTextPane ta = new JTextPane();
@@ -1596,7 +1581,7 @@ public final class SimpleGUI implements ComponentListener, Listener {
             return null;
         }
         final JTextArea text = OurUtil.textarea(alloytxt, 15, 85, false, false, new EmptyBorder(2, 2, 2, 2), new Font("Monospaced", Font.PLAIN, 12));
-        final JScrollPane scroll = OurUtil.scrollpane(text, new LineBorder(Color.DARK_GRAY, 1));
+        final JScrollPane scroll = OurUtil.scrollpane(text, new LineBorder(OurTheme.OUTLINE, 1));
         final JComboBox combo = new OurCombobox(new String[] {
                                                               "Alloy", "Kodkod", "JavaCup", "SAT4J", "ZChaff", "MiniSat"
         }) {
@@ -1630,15 +1615,15 @@ public final class SimpleGUI implements ComponentListener, Listener {
      * The color to use for functions/predicate/paragraphs that contains part of the
      * unsat core.
      */
-    final Color supCoreColor = new Color(0.95f, 0.1f, 0.1f);
+    final Color supCoreColor = OurTheme.CORE_STRONG;
 
     /** The color to use for the unsat core. */
-    final Color coreColor    = new Color(0.9f, 0.4f, 0.4f);
+    final Color coreColor    = OurTheme.CORE;
 
     /**
      * The color to use for functions/predicate used by the Unsat core.
      */
-    final Color subCoreColor = new Color(0.9f, 0.7f, 0.7f);
+    final Color subCoreColor = OurTheme.CORE_WEAK;
 
     /**
      * This method displays a particular instance or message.
@@ -1922,6 +1907,7 @@ public final class SimpleGUI implements ComponentListener, Listener {
                 return;
         }
 
+        AppTheme.prepare();
         SwingUtilities.invokeLater(new Runnable() {
 
             @Override
@@ -1958,6 +1944,7 @@ public final class SimpleGUI implements ComponentListener, Listener {
         }
 
         doLookAndFeel();
+        AppTheme.followSystem();
 
         // Figure out the desired x, y, width, and height
         int screenWidth = OurUtil.getScreenWidth(), screenHeight = OurUtil.getScreenHeight();
@@ -2145,7 +2132,7 @@ public final class SimpleGUI implements ComponentListener, Listener {
 
         // Create the message area
         logpane = OurUtil.scrollpane(null);
-        log = new SwingLogPanel(logpane, fontName, fontSize, background, Color.BLACK, new Color(.7f, .2f, .2f), this);
+        log = new SwingLogPanel(logpane, fontName, fontSize, background, OurTheme.TEXT, OurTheme.TEXT_WARNING, this);
 
         // Create loggers for preference changes
         PreferencesDialog.logOnChange(log, A4Preferences.allUserPrefs().toArray(new Pref< ? >[0]));
@@ -2165,7 +2152,7 @@ public final class SimpleGUI implements ComponentListener, Listener {
         text.addTo(lefthalf, BorderLayout.CENTER);
         splitpane = OurUtil.splitpane(JSplitPane.HORIZONTAL_SPLIT, lefthalf, logpane, width / 2);
         splitpane.setResizeWeight(0.5D);
-        status = OurUtil.make(OurAntiAlias.label(" "), new Font(fontName, Font.PLAIN, fontSize), Color.BLACK, background);
+        status = OurUtil.make(OurAntiAlias.label(" "), new Font(fontName, Font.PLAIN, fontSize), OurTheme.TEXT, background);
         status.setBorder(new OurBorder(true, false, false, false));
         all.add(splitpane, BorderLayout.CENTER);
         all.add(status, BorderLayout.SOUTH);
@@ -2189,7 +2176,11 @@ public final class SimpleGUI implements ComponentListener, Listener {
             prefDialog.addChangeListener(wrapToChangeListener(doOptRefreshFont()), FontName, FontSize, TabSize);
             prefDialog.addChangeListener(wrapToChangeListener(doOptAntiAlias()), AntiAlias);
             prefDialog.addChangeListener(wrapToChangeListener(doOptSyntaxHighlighting()), SyntaxDisabled);
-            prefDialog.addChangeListener(wrapToChangeListener(doLookAndFeel()), LAF);
+            prefDialog.addChangeListener(wrapToChangeListener(doLookAndFeel()), Appearance);
+            AppTheme.addListener(() -> {
+                notifyChange();
+                viz.themeChanged();
+            });
             prefDialog.addChangeListener(wrapToChangeListener(doOptRefreshLineNumbers()), LineNumbers);
         } finally {
             wrap = false;

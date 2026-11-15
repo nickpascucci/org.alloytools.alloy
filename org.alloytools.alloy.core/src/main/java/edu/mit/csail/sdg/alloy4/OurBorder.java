@@ -77,20 +77,20 @@ public final class OurBorder implements Border {
      * 4 sides of the component. Note: it paints the borders top, bottom, left, then
      * right.
      *
-     * @param top - true if we want to draw a Color.LIGHT_GRAY border line above the
+     * @param top - true if we want to draw a thin border line above the
      *            component
-     * @param left - true if we want to draw a Color.LIGHT_GRAY border line to the
+     * @param left - true if we want to draw a thin border line to the
      *            left of the component
-     * @param bottom - true if we want to draw a Color.LIGHT_GRAY border line below
+     * @param bottom - true if we want to draw a thin border line below
      *            the component
-     * @param right - true if we want to draw a Color.LIGHT_GRAY border line to the
+     * @param right - true if we want to draw a thin border line to the
      *            right of the component
      */
     public OurBorder(boolean top, boolean left, boolean bottom, boolean right) {
-        this.top = top ? Color.LIGHT_GRAY : null;
-        this.left = left ? Color.LIGHT_GRAY : null;
-        this.bottom = bottom ? Color.LIGHT_GRAY : null;
-        this.right = right ? Color.LIGHT_GRAY : null;
+        this.top = top ? OurTheme.BORDER : null;
+        this.left = left ? OurTheme.BORDER : null;
+        this.bottom = bottom ? OurTheme.BORDER : null;
+        this.right = right ? OurTheme.BORDER : null;
     }
 
     /**

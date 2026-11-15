@@ -81,19 +81,19 @@ public final class OurConsole extends JScrollPane {
     private static final long         serialVersionUID    = 0;
 
     /** The style for default text. */
-    private final static AttributeSet plain               = style("Verdana,Helvetica", 14, false, false, false, Color.BLACK, 0);
+    private final static AttributeSet plain               = style("Verdana,Helvetica", 14, false, false, false, OurTheme.TEXT, 0);
 
     /** The style for table text. */
-    private final static AttributeSet mono                = style("Input Mono,DejaVu Sans Mono,Courier New,Courier", 14, false, false, false, Color.BLACK, 10);
+    private final static AttributeSet mono                = style("Input Mono,DejaVu Sans Mono,Courier New,Courier", 14, false, false, false, OurTheme.TEXT, 10);
 
     /** The style for bold text. */
-    private final static AttributeSet bold                = style("Verdana,Helvetica", 14, true, false, false, Color.BLACK, 0);
+    private final static AttributeSet bold                = style("Verdana,Helvetica", 14, true, false, false, OurTheme.TEXT, 0);
 
     /** The style for successful result. */
-    private final static AttributeSet good                = style("Verdana,Helvetica", 14, false, false, false, Color.BLUE, 10);
+    private final static AttributeSet good                = style("Verdana,Helvetica", 14, false, false, false, OurTheme.TEXT_GOOD, 10);
 
     /** The style for failed result. */
-    private final static AttributeSet bad                 = style("Verdana,Helvetica", 14, false, false, false, Color.RED, 10);
+    private final static AttributeSet bad                 = style("Verdana,Helvetica", 14, false, false, false, OurTheme.TEXT_ERROR, 10);
 
     /**
      * The number of characters that currently exist above the horizontal divider
@@ -183,7 +183,7 @@ public final class OurConsole extends JScrollPane {
                                 // insert the divider and the sub JTextPane
         StyledDocument doc = main.getStyledDocument();
         JPanel divider = new JPanel();
-        divider.setBackground(Color.LIGHT_GRAY);
+        divider.setBackground(OurTheme.BORDER);
         divider.setPreferredSize(new Dimension(1, 1));
         MutableAttributeSet dividerStyle = new SimpleAttributeSet();
         StyleConstants.setComponent(dividerStyle, divider);
@@ -352,7 +352,7 @@ public final class OurConsole extends JScrollPane {
      * This helper method constructs a JTextPane with the given settings.
      */
     private static JTextPane do_makeTextPane(boolean editable, int topMargin, int bottomMargin, int otherMargin) {
-        JTextPane x = OurAntiAlias.pane(null, Color.BLACK, Color.WHITE, new Font("Verdana", Font.PLAIN, 14));
+        JTextPane x = OurAntiAlias.pane(null, OurTheme.TEXT, OurTheme.TEXT_BACKGROUND, new Font("Verdana", Font.PLAIN, 14));
         x.setEditable(editable);
         x.setAlignmentX(0);
         x.setAlignmentY(0);
