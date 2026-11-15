@@ -583,8 +583,14 @@ public class A4Preferences {
     /** The latest welcome screen that the user has seen. */
     public static final BooleanPref           Welcome                = new BooleanPref("Welcome", "Show welcome message at start up");
 
-    /** Look and feel */
-    public static final StringChoicePref      LAF                    = new StringChoicePref("LAF", "Look and feel", Arrays.asList("Native", "Cross-platform"), Util.onMac() || Util.onWindows() ? "Native" : "Cross-platform");
+    /** Whether the application is light, dark, or follows the operating system. */
+    public static final ChoicePref<OurTheme.Appearance> Appearance       = new ChoicePref<OurTheme.Appearance>("Appearance", "Theme", Arrays.asList(OurTheme.Appearance.values()), OurTheme.Appearance.SYSTEM) {
+
+                                                                             @Override
+                                                                             protected String serialize(OurTheme.Appearance value) {
+                                                                                 return value.name();
+                                                                             }
+                                                                         };
 
     /**
      * Whether syntax highlighting should be disabled or not.

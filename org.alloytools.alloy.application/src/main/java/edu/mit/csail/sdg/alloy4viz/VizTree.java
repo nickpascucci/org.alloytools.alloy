@@ -22,6 +22,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
+import edu.mit.csail.sdg.alloy4.OurTheme;
 import edu.mit.csail.sdg.alloy4.Err;
 import edu.mit.csail.sdg.alloy4.OurTree;
 import edu.mit.csail.sdg.alloy4.Pair;
@@ -50,7 +51,7 @@ public final class VizTree extends OurTree {
     public String convertValueToText(Object val, boolean selected, boolean expanded, boolean leaf, int row, boolean focus) {
         String c = ">";
         if (onWindows)
-            c = selected ? " style=\"color:#ffffff;\">" : " style=\"color:#000000;\">";
+            c = selected ? " style=\"color:#ffffff;\">" : " style=\"color:" + OurTheme.hex(OurTheme.TEXT) + ";\">";
         if (val instanceof A4Solution)
             return "<html> <b" + c + encode(title == null ? "" : title) + "</b></html>";
         if (val instanceof Sig) {

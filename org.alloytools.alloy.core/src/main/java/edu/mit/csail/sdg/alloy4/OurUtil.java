@@ -152,7 +152,7 @@ public final class OurUtil {
      *            OurUtil.make(component, attributes...)}
      */
     public static JTextArea textarea(String text, int rows, int columns, boolean editable, boolean wrap, Object... attributes) {
-        JTextArea ans = make(new JTextArea(text, rows, columns), Color.BLACK, Color.WHITE, new EmptyBorder(0, 0, 0, 0));
+        JTextArea ans = make(new JTextArea(text, rows, columns), OurTheme.TEXT, OurTheme.TEXT_BACKGROUND, new EmptyBorder(0, 0, 0, 0));
         ans.setEditable(editable);
         ans.setLineWrap(wrap);
         ans.setWrapStyleWord(wrap);
@@ -210,7 +210,7 @@ public final class OurUtil {
         button.setBorderPainted(false);
         button.setFocusable(false);
         if (!Util.onMac())
-            button.setBackground(new Color(0.9f, 0.9f, 0.9f));
+            button.setBackground(OurTheme.PANEL);
         button.setFont(button.getFont().deriveFont(10.0f));
         if (tip != null && tip.length() > 0)
             button.setToolTipText(tip);
@@ -263,7 +263,7 @@ public final class OurUtil {
                 c = (Component) x;
             }
             if (x instanceof String) {
-                c = label((String) x, Color.BLACK);
+                c = label((String) x, OurTheme.TEXT);
             }
             if (x instanceof Integer) {
                 int i = (Integer) x;

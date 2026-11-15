@@ -15,8 +15,6 @@
 
 package edu.mit.csail.sdg.alloy4graph;
 
-import static java.awt.Color.BLACK;
-import static java.awt.Color.WHITE;
 import static java.awt.event.InputEvent.BUTTON1_MASK;
 import static java.awt.event.InputEvent.BUTTON3_MASK;
 import static java.awt.event.InputEvent.CTRL_MASK;
@@ -54,6 +52,7 @@ import javax.swing.event.DocumentListener;
 import edu.mit.csail.sdg.alloy4.OurDialog;
 import edu.mit.csail.sdg.alloy4.OurPDFWriter;
 import edu.mit.csail.sdg.alloy4.OurPNGWriter;
+import edu.mit.csail.sdg.alloy4.OurTheme;
 import edu.mit.csail.sdg.alloy4.OurUtil;
 import edu.mit.csail.sdg.alloy4.Util;
 
@@ -230,7 +229,7 @@ public final strictfp class GraphViewer extends JPanel {
      * the given template (see {@link Graph#layout(LayoutTemplate, boolean)}).
      */
     public GraphViewer(JFrame parent, final Graph graph, LayoutTemplate template, boolean strict) {
-        OurUtil.make(this, BLACK, WHITE, new EmptyBorder(0, 0, 0, 0));
+        OurUtil.make(this, OurTheme.TEXT, OurTheme.TEXT_BACKGROUND, new EmptyBorder(0, 0, 0, 0));
         setBorder(null);
         this.scale = graph.defaultScale;
         this.graph = graph;
@@ -378,7 +377,7 @@ public final strictfp class GraphViewer extends JPanel {
      * static field, since we want to make sure we only instantiate it from the AWT
      * Event Dispatching thread.
      */
-    private final Color            badColor  = new Color(255, 200, 200);
+    private final Color            badColor  = OurTheme.INVALID;
 
     /**
      * This synchronized field stores the most recent DPI value.
@@ -399,9 +398,9 @@ public final strictfp class GraphViewer extends JPanel {
             return 0;
         try {
             recursive = true;
-            w1.setBackground(WHITE);
-            h1.setBackground(WHITE);
-            d1.setBackground(WHITE);
+            w1.setBackground(OurTheme.TEXT_BACKGROUND);
+            h1.setBackground(OurTheme.TEXT_BACKGROUND);
+            d1.setBackground(OurTheme.TEXT_BACKGROUND);
             boolean bad = false;
             double w;
             try {
@@ -488,7 +487,7 @@ public final strictfp class GraphViewer extends JPanel {
             dpi = oldDPI;
         }
         // Prepare the dialog box
-        final JLabel msg = OurUtil.label(" ", Color.RED);
+        final JLabel msg = OurUtil.label(" ", OurTheme.TEXT_ERROR);
         final JLabel w = OurUtil.label("Width: " + ((int) (graph.getTotalWidth() * scale)) + " pixels");
         final JLabel h = OurUtil.label("Height: " + ((int) (graph.getTotalHeight() * scale)) + " pixels");
         final JTextField w1 = new JTextField("" + iw);
@@ -580,9 +579,9 @@ public final strictfp class GraphViewer extends JPanel {
                 d1.setEnabled(false);
                 dp1.setEnabled(false);
                 msg.setText(" ");
-                w1.setBackground(WHITE);
-                h1.setBackground(WHITE);
-                d1.setBackground(WHITE);
+                w1.setBackground(OurTheme.TEXT_BACKGROUND);
+                h1.setBackground(OurTheme.TEXT_BACKGROUND);
+                d1.setBackground(OurTheme.TEXT_BACKGROUND);
             }
         });
         b2.addActionListener(new ActionListener() {
@@ -614,9 +613,9 @@ public final strictfp class GraphViewer extends JPanel {
                 d1.setEnabled(false);
                 dp1.setEnabled(true);
                 msg.setText(" ");
-                w1.setBackground(WHITE);
-                h1.setBackground(WHITE);
-                d1.setBackground(WHITE);
+                w1.setBackground(OurTheme.TEXT_BACKGROUND);
+                h1.setBackground(OurTheme.TEXT_BACKGROUND);
+                d1.setBackground(OurTheme.TEXT_BACKGROUND);
             }
         });
         // Ask whether the user wants to change the width, height, and DPI
@@ -730,9 +729,9 @@ public final strictfp class GraphViewer extends JPanel {
                 height = 10;
             BufferedImage bf = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
             Graphics2D gr = (Graphics2D) (bf.getGraphics());
-            gr.setColor(WHITE);
+            gr.setColor(Color.WHITE);
             gr.fillRect(0, 0, width, height);
-            gr.setColor(BLACK);
+            gr.setColor(Color.BLACK);
             gr.scale(scale, scale);
             gr.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             graph.draw(new Artist(gr), scale, null, false);
@@ -787,9 +786,9 @@ public final strictfp class GraphViewer extends JPanel {
             c = (GraphNode) sel;
             sel = c.ins.get(0);
         }
-        graph.draw(new Artist(g2), scale, sel, true);
+        graph.draw(new Artist(g2, OurTheme.isDark()), scale, sel, true);
         if (c != null) {
-            gr.setColor(((GraphEdge) sel).color());
+            gr.setColor(OurTheme.isDark() ? OurTheme.onDark(((GraphEdge) sel).color()) : ((GraphEdge) sel).color());
             gr.fillArc(c.x() - 5 - graph.getLeft(), c.y() - 5 - graph.getTop(), 10, 10, 0, 360);
         }
         g2.setTransform(oldAF);

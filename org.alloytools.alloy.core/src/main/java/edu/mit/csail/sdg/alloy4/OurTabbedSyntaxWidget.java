@@ -59,19 +59,19 @@ public final class OurTabbedSyntaxWidget {
     private final JPanel                component            = OurUtil.make(new JPanel());
 
     /** Background color for the list of tabs. */
-    private static final Color          GRAY                 = new Color(0.9f, 0.9f, 0.9f);
+    private static final Color          GRAY                 = OurTheme.PANEL;
 
     /** Background color for an inactive tab. */
-    private static final Color          INACTIVE             = new Color(0.8f, 0.8f, 0.8f);
+    private static final Color          INACTIVE             = OurTheme.TAB_INACTIVE;
 
     /** Background color for a inactive and highlighted tab. */
-    private static final Color          INACTIVE_HIGHLIGHTED = new Color(0.7f, 0.5f, 0.5f);
+    private static final Color          INACTIVE_HIGHLIGHTED = OurTheme.TAB_INACTIVE_MARKED;
 
     /** Foreground color for a active and highlighted tab. */
-    private static final Color          ACTIVE_HIGHLIGHTED   = new Color(0.5f, 0.2f, 0.2f);
+    private static final Color          ACTIVE_HIGHLIGHTED   = OurTheme.TAB_ACTIVE_MARKED;
 
     /** Default border color for each tab. */
-    private static final Color          BORDER               = Color.LIGHT_GRAY;
+    private static final Color          BORDER               = OurTheme.BORDER;
 
     /** The font name to use in the JTextArea */
     private String                      fontName             = "Monospaced";
@@ -218,9 +218,9 @@ public final class OurTabbedSyntaxWidget {
         for (int i = 0; i < tabs.size(); i++) {
             OurSyntaxWidget tab = tabs.get(i);
             boolean hl = tab.shaded();
-            tab.obj1.setBorder(new OurBorder(BORDER, BORDER, (i != me ? BORDER : Color.WHITE), BORDER));
-            tab.obj1.setBackground(i != me ? (hl ? INACTIVE_HIGHLIGHTED : INACTIVE) : Color.WHITE);
-            tab.obj1.setForeground(hl ? (i != me ? Color.BLACK : ACTIVE_HIGHLIGHTED) : Color.BLACK);
+            tab.obj1.setBorder(new OurBorder(BORDER, BORDER, (i != me ? BORDER : OurTheme.TEXT_BACKGROUND), BORDER));
+            tab.obj1.setBackground(i != me ? (hl ? INACTIVE_HIGHLIGHTED : INACTIVE) : OurTheme.TEXT_BACKGROUND);
+            tab.obj1.setForeground(hl ? (i != me ? OurTheme.TEXT : ACTIVE_HIGHLIGHTED) : OurTheme.TEXT);
         }
     }
 
@@ -439,8 +439,8 @@ public final class OurTabbedSyntaxWidget {
                     return true;
                 }
         }
-        final JLabel lb = OurUtil.label("", OurUtil.getVizFont().deriveFont(Font.BOLD), Color.BLACK, Color.WHITE);
-        lb.setBorder(new OurBorder(BORDER, BORDER, Color.WHITE, BORDER));
+        final JLabel lb = OurUtil.label("", OurUtil.getVizFont().deriveFont(Font.BOLD), OurTheme.TEXT, OurTheme.TEXT_BACKGROUND);
+        lb.setBorder(new OurBorder(BORDER, BORDER, OurTheme.TEXT_BACKGROUND, BORDER));
         lb.addMouseListener(new MouseAdapter() {
 
             @Override
@@ -511,7 +511,7 @@ public final class OurTabbedSyntaxWidget {
      * object.
      */
     public void shade(Pos pos) {
-        shade(Util.asList(pos), new Color(0.9f, 0.4f, 0.4f), true);
+        shade(Util.asList(pos), OurTheme.CORE, true);
     }
 
     public OurSyntaxWidget open(Pos pos) {

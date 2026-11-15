@@ -16,7 +16,6 @@
 package edu.mit.csail.sdg.alloy4viz;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -32,6 +31,7 @@ import javax.swing.JScrollPane;
 import edu.mit.csail.sdg.alloy4.ConstSet;
 import edu.mit.csail.sdg.alloy4.MailBug;
 import edu.mit.csail.sdg.alloy4.OurCheckbox;
+import edu.mit.csail.sdg.alloy4.OurTheme;
 import edu.mit.csail.sdg.alloy4.OurUtil;
 import edu.mit.csail.sdg.alloy4graph.DotColor;
 import edu.mit.csail.sdg.alloy4graph.DotPalette;
@@ -269,7 +269,7 @@ public final class VizState {
             ans = new JPanel();
             ans.setLayout(new BorderLayout());
             ans.add(scroll, BorderLayout.CENTER);
-            ans.setBackground(Color.WHITE);
+            ans.setBackground(OurTheme.TEXT_BACKGROUND);
         }
         ans.setBorder(null);
         return ans;

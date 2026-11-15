@@ -1,5 +1,6 @@
 
 Main-Class: org.alloytools.alloy.core.infra.Alloy
+Multi-Release: true
 JPM-Command: alloy
 -buildpath: \
 	org.alloytools.alloy.application,\
@@ -36,6 +37,10 @@ JPM-Command: alloy
     @${repo;com.google.gson}, \
     @${repo;org.eclipse.equinox.common}, \
     @${repo;org.apache.commons.io}, \
+    @${repo;com.formdev:flatlaf}, \
 	LICENSES
 
 -dependson: *
+
+# FlatLaf is a multi-release jar; its Java 9+ classes are kept under META-INF/versions
+-fixupmessages.multirelease: "Classes found in the wrong directory";is:=ignore

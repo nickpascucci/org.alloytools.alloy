@@ -89,7 +89,7 @@ public final class OurSyntaxWidget {
     private final OurSyntaxUndoableDocument doc              = new OurSyntaxUndoableDocument("Monospaced", 14);
 
     /** The underlying JTextPane being displayed. */
-    private final JTextPane                 pane             = OurAntiAlias.pane(this::getTooltip, Color.BLACK, Color.WHITE, new EmptyBorder(6, 6, 6, 6));
+    private final JTextPane                 pane             = OurAntiAlias.pane(this::getTooltip, OurTheme.TEXT, OurTheme.TEXT_BACKGROUND, new EmptyBorder(6, 6, 6, 6));
 
     /**
      * The filename for this JTextPane (changes will trigger the STATUS_CHANGE

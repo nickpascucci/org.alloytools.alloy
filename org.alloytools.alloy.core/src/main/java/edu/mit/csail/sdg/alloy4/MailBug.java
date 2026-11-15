@@ -15,7 +15,6 @@
 
 package edu.mit.csail.sdg.alloy4;
 
-import java.awt.Color;
 import java.awt.Dimension;
 import java.io.BufferedInputStream;
 import java.io.InputStream;
@@ -268,7 +267,7 @@ public final class MailBug implements UncaughtExceptionHandler, Runnable {
         try {
             final String report = prepareCrashReport(thread, ex, email, problem);
             final String alt = "Sorry. An error has occurred in posting the bug report.\n" + "Please email this report to alloy@mit.edu directly.\n\n" + dump(ex);
-            final JTextArea status = OurUtil.textarea("Sending the bug report... please wait...", 10, 40, false, true, new LineBorder(Color.GRAY));
+            final JTextArea status = OurUtil.textarea("Sending the bug report... please wait...", 10, 40, false, true, new LineBorder(OurTheme.OUTLINE));
             new Thread(new Runnable() {
 
                 @Override
@@ -313,9 +312,9 @@ public final class MailBug implements UncaughtExceptionHandler, Runnable {
             System.err.flush();
         }
         final String yes = "Send the Bug Report", no = "Don't Send the Bug Report";
-        final JTextField email = OurUtil.textfield("", 20, new LineBorder(Color.DARK_GRAY));
+        final JTextField email = OurUtil.textfield("", 20, new LineBorder(OurTheme.OUTLINE));
         final JTextArea problem = OurUtil.textarea("", 50, 50, true, false, new EmptyBorder(0, 0, 0, 0));
-        final JScrollPane scroll = OurUtil.scrollpane(problem, new LineBorder(Color.DARK_GRAY), new Dimension(300, 200));
+        final JScrollPane scroll = OurUtil.scrollpane(problem, new LineBorder(OurTheme.OUTLINE), new Dimension(300, 200));
         for (Throwable ex2 = ex; ex2 != null; ex2 = ex2.getCause()) {
             if (ex2 instanceof StackOverflowError)
                 OurDialog.fatal(parent, new Object[] {

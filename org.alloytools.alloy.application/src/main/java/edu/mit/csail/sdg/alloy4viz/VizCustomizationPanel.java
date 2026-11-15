@@ -49,6 +49,7 @@ import edu.mit.csail.sdg.alloy4.OurBorder;
 import edu.mit.csail.sdg.alloy4.OurCheckbox;
 import edu.mit.csail.sdg.alloy4.OurCombobox;
 import edu.mit.csail.sdg.alloy4.OurTree;
+import edu.mit.csail.sdg.alloy4.OurTheme;
 import edu.mit.csail.sdg.alloy4.OurUtil;
 import edu.mit.csail.sdg.alloy4.Util;
 import edu.mit.csail.sdg.alloy4graph.DotColor;
@@ -89,7 +90,7 @@ public final class VizCustomizationPanel extends JPanel {
     /**
      * This is the background color for the upper-half of the customization panel.
      */
-    private static final Color  wcolor           = new Color(0.9f, 0.9f, 0.9f);
+    private static final Color  wcolor           = OurTheme.PANEL;
 
     /** This is the upper-half of the customization panel. */
     private final JPanel        zoomPane;
@@ -282,7 +283,7 @@ public final class VizCustomizationPanel extends JPanel {
         }
         tree.scrollPathToVisible(last);
         tree.setSelectionPath(last);
-        JScrollPane scroll = OurUtil.scrollpane(tree, Color.BLACK, Color.WHITE, new OurBorder(false, false, false, Util.onMac()));
+        JScrollPane scroll = OurUtil.scrollpane(tree, OurTheme.TEXT, OurTheme.TEXT_BACKGROUND, new OurBorder(false, false, false, Util.onMac()));
         scroll.setAlignmentX(0f);
         scroll.getVerticalScrollBar().setUnitIncrement(50);
         removeAll();

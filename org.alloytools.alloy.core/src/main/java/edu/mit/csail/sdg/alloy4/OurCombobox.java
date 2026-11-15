@@ -15,7 +15,6 @@
 
 package edu.mit.csail.sdg.alloy4;
 
-import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.event.ActionEvent;
@@ -114,7 +113,7 @@ public class OurCombobox<T> extends JComboBox<T> {
             @Override
             public Component getListCellRendererComponent(JList list, Object value, int i, boolean selected, boolean focused) {
                 if (jlabel == null)
-                    jlabel = OurUtil.label("", Color.BLACK, Color.WHITE, new EmptyBorder(0, 2, 0, 0));
+                    jlabel = OurUtil.label("", OurTheme.TEXT, OurTheme.TEXT_BACKGROUND, new EmptyBorder(0, 2, 0, 0));
                 jlabel.setText(do_getText(value));
                 jlabel.setIcon(do_getIcon(value));
                 jlabel.setBackground(selected ? list.getSelectionBackground() : list.getBackground());

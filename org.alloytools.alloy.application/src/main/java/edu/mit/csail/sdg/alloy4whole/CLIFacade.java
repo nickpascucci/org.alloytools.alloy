@@ -15,6 +15,7 @@ public class CLIFacade {
 
     @Description("Opens up the Graphic User Interface of Alloy" )
     public void _gui(GuiOptions options) {
+        AppTheme.prepare();
         new SimpleGUI(options._arguments().toArray(new String[0]));
     }
 

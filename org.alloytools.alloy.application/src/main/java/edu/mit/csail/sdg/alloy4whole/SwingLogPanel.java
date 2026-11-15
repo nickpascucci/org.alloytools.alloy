@@ -43,6 +43,7 @@ import javax.swing.text.View;
 import javax.swing.text.ViewFactory;
 
 import edu.mit.csail.sdg.alloy4.OurAntiAlias;
+import edu.mit.csail.sdg.alloy4.OurTheme;
 import edu.mit.csail.sdg.alloy4.OurUtil;
 
 /**
@@ -127,12 +128,12 @@ final class SwingLogPanel {
     /**
      * The color to use for hyperlinks when the mouse is not hovering over it.
      */
-    private static final Color       linkColor      = new Color(0.3f, 0.3f, 0.9f);
+    private static final Color       linkColor      = OurTheme.LINK;
 
     /**
      * The color to use for a hyperlink when the mouse is hovering over it.
      */
-    private static final Color       hoverColor     = new Color(0.9f, 0.3f, 0.3f);
+    private static final Color       hoverColor     = OurTheme.LINK_HOVER;
 
     /**
      * This stores a default ViewFactory that will handle the View requests that we
@@ -155,7 +156,7 @@ final class SwingLogPanel {
         this.handler = handler;
         this.fontName = fontName;
         this.fontSize = fontSize;
-        this.log = OurUtil.make(OurAntiAlias.pane(null), Color.BLACK, background, new EmptyBorder(1, 1, 1, 1), new Font(fontName, Font.PLAIN, fontSize));
+        this.log = OurUtil.make(OurAntiAlias.pane(null), OurTheme.TEXT, background, new EmptyBorder(1, 1, 1, 1), new Font(fontName, Font.PLAIN, fontSize));
         // This customized StyledEditorKit prevents line-wrapping up to 30000
         // pixels wide.
         // 30000 is a good number; value higher than about 32768 will cause
@@ -232,7 +233,7 @@ final class SwingLogPanel {
         StyledDocument doc = log.getStyledDocument();
         Style dividerStyle = doc.addStyle("bar", styleRegular);
         JPanel jpanel = new JPanel();
-        jpanel.setBackground(Color.LIGHT_GRAY);
+        jpanel.setBackground(OurTheme.BORDER);
         jpanel.setPreferredSize(new Dimension(300, 1)); // 300 is arbitrary,
                                                        // since it will
                                                        // auto-stretch
